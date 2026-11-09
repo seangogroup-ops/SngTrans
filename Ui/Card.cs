@@ -72,7 +72,7 @@ public sealed class Card : Form, ICardState
         _copy = Btn(Theme.GCopy, "Sao chép bản dịch", 16);
         _add = new FlatBtn
         {
-            Caption = "Ghi chú", Bold = true, FontPx = 13, Radius = 12, Fore = Theme.C("#0f1629"), HoverFore = Theme.C("#0f1629"),
+            Caption = "Ghi nhớ", Bold = true, FontPx = 13, Radius = 12, Fore = Theme.C("#0f1629"), HoverFore = Theme.C("#0f1629"),
             Back = Theme.C("#f5f7fc"), HoverBack = Theme.C("#e4e9f6"), DisabledBack = Theme.C("#222d4f"), DisabledFore = Theme.Dim,
             Cursor = Cursors.Hand,
         };
@@ -273,13 +273,13 @@ public sealed class Card : Form, ICardState
         _noted = added;
         if (added)
         {
-            _add.Glyph = Theme.GCheck; _add.IconPx = 13; _add.Caption = "Đã ghi chú";
+            _add.Glyph = ""; _add.Caption = "Ghi nhớ";
             _add.DisabledBack = Theme.C("#22c55e"); _add.DisabledFore = Color.White;
             _add.Enabled = false;
         }
         else
         {
-            _add.Glyph = ""; _add.Caption = "Ghi chú";
+            _add.Glyph = ""; _add.Caption = "Ghi nhớ";
             _add.DisabledBack = Theme.C("#222d4f"); _add.DisabledFore = Theme.Dim;
             _add.Enabled = false;                       // chỉ bật khi đã có bản dịch
         }
@@ -453,7 +453,7 @@ public sealed class Card : Form, ICardState
             _block.Width = Math.Min(inner / 2 + Px(30), _block.PreferredWidth);
             _block.Height = Px(24);
             _block.Location = new Point(pad, y + (fh - _block.Height) / 2);
-            int aw = Gfx.TextWidth(_add.Caption, Theme.Ui(13, true, S)) + Px(32) + (_noted ? Px(20) : 0);
+            int aw = Gfx.TextWidth(_add.Caption, Theme.Ui(13, true, S)) + Px(32);
             _add.SetBounds(W - pad - aw, y, aw, fh);
             y += fh;
         }
