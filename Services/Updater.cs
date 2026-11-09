@@ -88,8 +88,9 @@ public static class Updater
             foreach (var a in assets.EnumerateArray())
             {
                 var name = a.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "";
+                bool isLight = name.Contains("nhe", StringComparison.OrdinalIgnoreCase);
                 if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) &&
-                    name.Contains(want, StringComparison.OrdinalIgnoreCase) &&
+                    (want == "nhe" ? isLight : !isLight) &&
                     a.TryGetProperty("browser_download_url", out var u))
                 {
                     asset = u.GetString();
