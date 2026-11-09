@@ -6,6 +6,8 @@ namespace SngTrans.Ui;
 public sealed class Card : Form, ICardState
 {
     const int BodyW = 388, Pad = 16, InnerW = BodyW - 2 * Pad;
+    /// <summary>Thu nhỏ cả thẻ dịch so với kích thước chuẩn (1 = cũ, 0.8 = nhỏ hơn 20%). Muốn nhỏ nữa thì giảm số này.</summary>
+    const float CardShrink = 0.8f;
 
     public event Action<(string Src, string Tgt)?>? TranslateRequested;   // null = dịch tự động
     public event Action<string, string>? SpeakRequested;
@@ -193,6 +195,7 @@ public sealed class Card : Form, ICardState
     // ------------------------------------------------------------ tỉ lệ
     void ApplyScale(float s)
     {
+        s *= CardShrink;
         S = s;
         foreach (var c in _ctls) c.S = s;
         _block.FontPx = 12;
