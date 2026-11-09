@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Microsoft.Win32;
 using SngTrans.Ui;
 
 namespace SngTrans;
@@ -24,6 +25,46 @@ static class Program
         }
         Log.Info($"kết thúc tác vụ bản đang chạy -> {(fail ? "lỗi" : any ? "ok" : "không có")}");
         return fail ? "fail" : any ? "ok" : "none";
+    }
+
+    /// <summary>Tự bật "Chạy cùng Windows" ở lần đầu (kể cả máy nâng cấp từ bản cũ vốn không còn first_run),
+    /// sửa lại đường dẫn nếu exe đã đổi chỗ, và bỏ độ trễ ~10 giây mà Windows áp cho app khởi động cùng máy.
+    /// Chạy trên luồng nền. Người dùng đã tắt thì không bật lại.</summary>
+    static void EnsureAutostart()
+    {
+        try
+        {
+            var path = Environment.ProcessPath;
+            if (string.IsNullOrEmpty(path) ||
+                string.Equals(Path.GetFileNameWithoutExtension(path), "dotnet", StringComparison.OrdinalIgnoreCase)) return;
+
+            const string runKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
+            var want = $"\"{path}\"";
+
+            using (var own = Registry.CurrentUser.CreateSubKey(@"Software\SngTrans"))
+            {
+                if (own.GetValue("BootInit") == null)
+                {
+                    Win32.SetAutostart(true);
+                    own.SetValue("BootInit", 1, RegistryValueKind.DWord);
+                    Log.Info("tự bật chạy cùng Windows lần đầu");
+                }
+            }
+
+            using var k = Registry.CurrentUser.OpenSubKey(runKey, true);
+            if (k?.GetValue("SngTrans") is not string cur) return;          // đã tắt: để yên
+            if (!string.Equals(cur, want, StringComparison.OrdinalIgnoreCase))
+            {
+                k.SetValue("SngTrans", want, RegistryValueKind.String);     // exe đổi chỗ: trỏ lại cho đúng
+                Log.Info("đã sửa đường dẫn chạy cùng Windows");
+            }
+
+            // Windows trì hoãn app trong mục Run; đặt 0 (chỉ HKCU, không cần admin) để lên ngay
+            using var ser = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Explorer\Serialize");
+            if (ser.GetValue("StartupDelayInMSec") is not int d || d != 0)
+                ser.SetValue("StartupDelayInMSec", 0, RegistryValueKind.DWord);
+        }
+        catch (Exception e) { Log.Error("không đảm bảo được chạy cùng Windows", e); }
     }
 
     static void ShowAlreadyRunning()
@@ -111,6 +152,7 @@ static class Program
             ShowAlreadyRunning();                                                      // bản cũ không hỗ trợ: hiện hộp thoại như trước
             return 0;
         }
+        _ = Task.Run(EnsureAutostart);
         try
         {
             Application.Run(new TrayApp(args.Contains("--settings")));
