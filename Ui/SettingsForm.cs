@@ -514,7 +514,7 @@ public sealed class SettingsForm : Form
         _done.Click += (_, _) => Close();
         _kill = new FlatBtn
         {
-            Caption = "Kết thúc tác vụ", Bold = false, FontPx = 13, Radius = 10, Fore = Theme.Err, HoverFore = Theme.Err,
+            Caption = "Tắt app", Bold = false, FontPx = 13, Radius = 10, Fore = Theme.Err, HoverFore = Theme.Err,
             Back = Theme.Field, HoverBack = Theme.FieldHover, Cursor = Cursors.Hand, S = _scale,
         };
         _kill.Click += (_, _) => ForceQuit?.Invoke();
