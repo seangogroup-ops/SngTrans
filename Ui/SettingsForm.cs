@@ -355,29 +355,46 @@ sealed class VocabRow : Ctl, ILayoutRow
 {
     readonly Lbl _w, _t;
     public readonly FlatBtn Speak = new() { Glyph = Theme.GVolume, IconPx = 16, Cursor = Cursors.Hand };
+    public readonly FlatBtn Copy = new() { Glyph = Theme.GCopy, IconPx = 16, Cursor = Cursors.Hand };
     public readonly FlatBtn Delete = new() { Glyph = Theme.GDelete, IconPx = 16, Cursor = Cursors.Hand };
+    readonly System.Windows.Forms.Timer _copied = new() { Interval = 1200 };
+
+    /// <summary>Báo đã chép: đổi sang dấu tích xanh một lúc rồi trả lại biểu tượng cũ.</summary>
+    public void FlashCopied()
+    {
+        Copy.Glyph = Theme.GCheck; Copy.Fore = Theme.C("#4ade80"); Copy.Invalidate();
+        _copied.Stop(); _copied.Start();
+    }
 
     public VocabRow(VocabItem v)
     {
+        _copied.Tick += (_, _) => { _copied.Stop(); Copy.Glyph = Theme.GCopy; Copy.Fore = Theme.Muted; Copy.Invalidate(); };
         _w = new Lbl(v.Text, 15, Color.White, true);
         _t = new Lbl(v.Translation, 13, Theme.Link);
-        Controls.AddRange(new Control[] { _w, _t, Speak, Delete });
+        Controls.AddRange(new Control[] { _w, _t, Speak, Copy, Delete });
     }
 
     public int DoLayout(int width, float s)
     {
         S = s;
-        Speak.S = Delete.S = s;
+        Speak.S = Copy.S = Delete.S = s;
         _w.Restyle(15, true, s); _t.Restyle(13, false, s);
-        int btn = Px(30), left = Px(14), tw = width - left - 2 * btn - Px(10);
+        int btn = Px(30), left = Px(14), tw = width - left - 3 * btn - Px(10);
         int wh = _w.HeightFor(tw), th = _t.HeightFor(tw);
         int h = Math.Max(wh + th + Px(2), btn) + Px(20);
         _w.SetBounds(left, Px(10), tw, wh);
         _t.SetBounds(left, Px(10) + wh + Px(2), tw, th);
-        Speak.SetBounds(width - 2 * btn - Px(8), Px(6), btn, btn);
+        Speak.SetBounds(width - 3 * btn - Px(10), Px(6), btn, btn);
+        Copy.SetBounds(width - 2 * btn - Px(7), Px(6), btn, btn);
         Delete.SetBounds(width - btn - Px(4), Px(6), btn, btn);
         Size = new Size(width, h);
         return h;
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing) _copied.Dispose();
+        base.Dispose(disposing);
     }
 
     protected override void OnPaint(PaintEventArgs e)
@@ -616,8 +633,8 @@ public sealed class SettingsForm : Form
     void BuildVocab()
     {
         _search.Inner.TextChanged += (_, _) => RefreshVocab();
-        _export = new FlatBtn { Caption = "Xuất CSV", FontPx = 13, Radius = 10, Fore = Color.White, HoverFore = Color.White, Back = Theme.Field, HoverBack = Theme.FieldHover, Cursor = Cursors.Hand };
-        _clear = new FlatBtn { Caption = "Xoá hết", FontPx = 13, Radius = 10, Fore = Theme.Err, HoverFore = Theme.Err, Back = Theme.Field, HoverBack = Theme.FieldHover, Cursor = Cursors.Hand };
+        _export = new FlatBtn { Glyph = "\uE896", IconPx = 13, Caption = "Xuất CSV", FontPx = 12, Radius = 8, Fore = Theme.Link, HoverFore = Color.White, Back = Color.Empty, HoverBack = Theme.FieldHover, Cursor = Cursors.Hand };
+        _clear = new FlatBtn { Glyph = Theme.GDelete, IconPx = 13, Caption = "Xoá hết", FontPx = 12, Radius = 8, Fore = Theme.Err, HoverFore = Color.White, Back = Color.Empty, HoverBack = Theme.C("#5b2330"), Cursor = Cursors.Hand };
         _export.Click += (_, _) => ExportCsv();
         _clear.Click += (_, _) => ClearAll();
         _vocabPage.Controls.AddRange(new Control[] { _search, _count, _vocabList, _export, _clear });
@@ -699,7 +716,7 @@ public sealed class SettingsForm : Form
         if (_vocabEmpty != null) { _vocabList.Controls.Remove(_vocabEmpty); _vocabEmpty.Dispose(); _vocabEmpty = null; }
         if (shown.Count == 0)
         {
-            _vocabEmpty = new Lbl(q.Length > 0 ? "Không tìm thấy ghi chú nào." : "Chưa có ghi chú nào.\nBấm “Ghi chú” trên thẻ dịch để lưu.", 13, Theme.Section, false, _scale)
+            _vocabEmpty = new Lbl(q.Length > 0 ? "Không tìm thấy ghi chú nào." : "Chưa có ghi chú nào.\nBấm “Ghi nhớ” trên thẻ dịch để lưu.", 13, Theme.Section, false, _scale)
             { TextAlign = ContentAlignment.MiddleCenter };
             _vocabList.Controls.Add(_vocabEmpty);
         }
@@ -708,6 +725,11 @@ public sealed class SettingsForm : Form
             var row = new VocabRow(v);
             var item = v;
             row.Speak.Click += (_, _) => _speak(item.Text, string.IsNullOrEmpty(item.Source) ? "en" : item.Source);
+            row.Copy.Click += (_, _) =>
+            {
+                try { Clipboard.SetText(item.Text + "\r\n" + item.Translation); row.FlashCopied(); }
+                catch { /* clipboard đang bị app khác giữ */ }
+            };
             row.Delete.Click += (_, _) => { _s.RemoveVocab(item.Ts); RefreshVocab(); };
             _vocabRows.Add(row);
             _vocabList.Controls.Add(row);
@@ -799,15 +821,19 @@ public sealed class SettingsForm : Form
         {
             int pw = area.Width, ph = area.Height, fh = Px(40);
             _search.S = _scale;
-            _search.SetBounds(0, 0, pw - Px(110), fh);
+            _search.SetBounds(0, 0, pw, fh);
+            // hàng công cụ: số ghi chú bên trái, Xuất CSV / Xoá hết dạng chữ nhỏ bên phải
+            int rh = Px(30), ry = fh + Px(8);
             _count.Restyle(12, false, _scale);
-            _count.TextAlign = ContentAlignment.MiddleRight;
-            _count.SetBounds(pw - Px(100), 0, Px(100), fh);
-            int btnH = Px(38);
+            _count.TextAlign = ContentAlignment.MiddleLeft;
+            _count.SetBounds(Px(4), ry, Math.Max(10, pw / 3), rh);
             _export.S = _clear.S = _scale;
-            _export.SetBounds(0, ph - btnH, Px(110), btnH);
-            _clear.SetBounds(pw - Px(110), ph - btnH, Px(110), btnH);
-            _vocabList.SetBounds(0, fh + Px(10), pw, ph - btnH - fh - Px(20));
+            int cw = Gfx.TextWidth(_clear.Caption, Theme.Ui(12, false, _scale)) + Px(13 + 6 + 20);
+            int ew = Gfx.TextWidth(_export.Caption, Theme.Ui(12, false, _scale)) + Px(13 + 6 + 20);
+            _clear.SetBounds(pw - cw, ry, cw, rh);
+            _export.SetBounds(pw - cw - Px(4) - ew, ry, ew, rh);
+            int ly = ry + rh + Px(6);
+            _vocabList.SetBounds(0, ly, pw, Math.Max(50, ph - ly));
             LayoutVocabList();
         }
     }
