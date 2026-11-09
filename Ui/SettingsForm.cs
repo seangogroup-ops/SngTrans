@@ -496,6 +496,8 @@ public sealed class SettingsForm : Form
     readonly Lbl _count = new("", 12, Theme.SubLabel);
     FlatBtn _export = null!, _clear = null!;
     readonly List<VocabRow> _vocabRows = new();
+    readonly System.Windows.Forms.Timer _watch = new() { Interval = 1000 };   // tự làm mới danh sách khi có ghi chú mới
+    (int Count, long FirstTs) _vocabSig;
     Label? _vocabEmpty;
     LangPicker? _picker;
     bool _pickNative;
@@ -547,9 +549,13 @@ public sealed class SettingsForm : Form
         _tabs.Selected += i =>
         {
             for (int k = 0; k < _pages.Count; k++) _pages[k].Visible = k == i;
+            if (i == 2) RefreshVocab();
             RelayoutAll();
         };
         Resize += (_, _) => RelayoutAll();
+        Activated += (_, _) => SyncVocabIfChanged();
+        _watch.Tick += (_, _) => SyncVocabIfChanged();
+        _watch.Start();
     }
 
     // ---------------------------------------------------------------- cấu trúc trang
@@ -706,6 +712,7 @@ public sealed class SettingsForm : Form
     void RefreshVocab()
     {
         var items = _s.Vocab();
+        _vocabSig = (items.Count, items.Count > 0 ? items[0].Ts : 0L);
         var q = _search.Text.Trim().ToLowerInvariant();
         var shown = items.Where(v => q.Length == 0 || v.Text.ToLowerInvariant().Contains(q) || v.Translation.ToLowerInvariant().Contains(q)).ToList();
         _count.Text = q.Length > 0 ? $"{shown.Count}/{items.Count} ghi chú" : $"{items.Count} ghi chú";
@@ -736,6 +743,15 @@ public sealed class SettingsForm : Form
         }
         _vocabList.ResumeLayout(false);
         LayoutVocabList();
+    }
+
+    /// <summary>Ghi chú vừa được thêm từ thẻ dịch lúc hộp này đang mở: nạp lại danh sách nếu file đã đổi.</summary>
+    void SyncVocabIfChanged()
+    {
+        if (!IsHandleCreated || !_vocabPage.Visible) return;
+        var items = _s.Vocab();
+        var sig = (items.Count, items.Count > 0 ? items[0].Ts : 0L);
+        if (sig != _vocabSig) RefreshVocab();
     }
 
     void LayoutVocabList()
@@ -901,7 +917,7 @@ public sealed class SettingsForm : Form
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) { _picker?.Dispose(); _tip.Dispose(); }
+        if (disposing) { _watch.Dispose(); _picker?.Dispose(); _tip.Dispose(); }
         base.Dispose(disposing);
     }
 }
