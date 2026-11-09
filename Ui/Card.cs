@@ -406,11 +406,24 @@ public sealed class Card : Form, ICardState
         {
             int ph = Px(32);
             int x = pad;
-            _srcPill.Height = ph; _srcPill.Remeasure(); _srcPill.Location = new Point(x, y); x += _srcPill.Width + Px(2);
-            _swap.SetBounds(x, y + (ph - btn) / 2, btn, btn); x += btn + Px(2);
-            _tgtPill.Height = ph; _tgtPill.Remeasure(); _tgtPill.Location = new Point(x, y);
+            _srcPill.Height = ph; _srcPill.Remeasure();
+            _tgtPill.Height = ph; _tgtPill.Remeasure();
             _close.SetBounds(W - pad - btn, y + (ph - btn) / 2, btn, btn);
             _pin.SetBounds(_close.Left - btn - Px(2), y + (ph - btn) / 2, btn, btn);
+            // Tên ngôn ngữ dài (vd "中文 (简体)") không được lấn sang nút ghim/đóng: co hai viên lại, chữ thừa thành "…"
+            int avail = _pin.Left - Px(6) - pad - btn - Px(4);
+            int need = _srcPill.Width + _tgtPill.Width;
+            if (need > avail && need > 0)
+            {
+                int minW = Px(84);
+                int sw = Math.Max(minW, (int)((long)avail * _srcPill.Width / need));
+                int tw = Math.Max(minW, avail - sw);
+                _srcPill.Width = Math.Min(_srcPill.Width, sw);
+                _tgtPill.Width = Math.Min(_tgtPill.Width, tw);
+            }
+            _srcPill.Location = new Point(x, y); x += _srcPill.Width + Px(2);
+            _swap.SetBounds(x, y + (ph - btn) / 2, btn, btn); x += btn + Px(2);
+            _tgtPill.Location = new Point(x, y);
             y += ph + Px(12);
 
             _orig.Location = new Point(pad, y);
