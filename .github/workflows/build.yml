@@ -44,7 +44,7 @@ jobs:
         shell: pwsh
         run: |
           Copy-Item dist/nhe/SngTrans.exe SngTrans-nhe.exe
-          Copy-Item dist/day-du/SngTrans.exe SngTrans-day-du.exe
+          Copy-Item dist/day-du/SngTrans.exe SngTrans.exe
 
       - name: Dang Release (app tren may nguoi dung se tu bao cap nhat)
         if: steps.ver.outputs.release == 'true'
@@ -56,4 +56,4 @@ jobs:
           generate_release_notes: true
           files: |
             SngTrans-nhe.exe
-            SngTrans-day-du.exe
+            SngTrans.exe
