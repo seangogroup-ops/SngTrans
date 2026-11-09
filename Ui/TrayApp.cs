@@ -267,9 +267,30 @@ public sealed class TrayApp : ApplicationContext
             catch (Exception e)
             {
                 Log.Error("dịch lỗi", e);
-                UI(() => { if (rid == _current && _card.Visible) _card.ShowError($"Không dịch được ({e.Message})"); });
+                UI(() => { if (rid == _current && _card.Visible) _card.ShowError(FriendlyError(e)); });
             }
         });
+    }
+
+    /// <summary>Đổi lỗi kỹ thuật (tiếng Anh, tên máy chủ...) thành câu dễ hiểu cho người dùng.</summary>
+    static string FriendlyError(Exception e)
+    {
+        const string fail = "Không dịch được";
+        const string offline = "Vui lòng kết nối mạng rồi thử lại";
+        for (var x = e; x != null; x = x.InnerException)
+        {
+            if (x is System.Net.Sockets.SocketException or System.Net.Http.HttpRequestException
+                or System.IO.IOException)
+                return $"{fail} ({offline})";
+        }
+        var m = e.Message ?? "";
+        if (m.Contains("No such host", StringComparison.OrdinalIgnoreCase)
+            || m.Contains("không kết nối được", StringComparison.OrdinalIgnoreCase)
+            || m.Contains("quá thời gian chờ", StringComparison.OrdinalIgnoreCase)
+            || m.Contains("timed out", StringComparison.OrdinalIgnoreCase)
+            || m.Contains("network", StringComparison.OrdinalIgnoreCase))
+            return $"{fail} ({offline})";
+        return $"{fail} ({m})";
     }
 
     void CopyText(string t)
