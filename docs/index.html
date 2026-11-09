@@ -53,6 +53,14 @@ h2{font-size:28px;margin:0 0 6px;letter-spacing:-.01em}
 .warn{background:var(--soft);border:1px solid var(--line);border-radius:16px;padding:16px 20px;color:var(--mut);font-size:15px;margin-top:18px}
 footer{border-top:1px solid var(--line);margin-top:30px;padding:22px 0 40px;color:var(--mut);font-size:14px;text-align:center}
 footer a{color:var(--brand)}
+.guide{margin-top:26px}
+.guide h3.gt{font-size:20px;margin:0 0 4px}
+.guide .gs{color:var(--mut);margin:0 0 16px;font-size:15px}
+.gimgs{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:16px}
+.gimgs figure{margin:0;background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.gimgs img{display:block;width:100%;height:auto}
+.gimgs figcaption{padding:12px 16px;font-size:14.5px;color:var(--mut)}
+.gimgs figcaption b{color:var(--ink)}
 @media (max-width:820px){.hero{grid-template-columns:1fr}.mock{margin:0 auto}}
 </style>
 </head>
@@ -92,7 +100,15 @@ footer a{color:var(--brand)}
       <div class="st"><h3>Bấm đúp để chạy</h3><p>App tự chạy ngầm, không có cửa sổ.</p></div>
       <div class="st"><h3>Bôi đen chữ</h3><p>Bản dịch hiện ngay trên con trỏ.</p></div>
     </div>
-    <p class="warn">Nếu Windows hiện cảnh báo, bấm <b>More info</b> rồi <b>Run anyway</b>.</p>
+    <div class="guide">
+      <h3 class="gt">Máy hiện cảnh báo khi mở app?</h3>
+      <p class="gs">Nếu máy hiện cảnh báo khi tải hoặc mở app, bạn làm theo 3 bước sau.</p>
+      <div class="gimgs">
+        <figure><img src="anh/buoc1-keep.jpg" alt="Bước 1: bấm dấu ba chấm rồi chọn Keep" loading="lazy"><figcaption><b>Bước 1.</b> Trình duyệt hỏi giữ file: bấm <b>⋯</b> rồi chọn <b>Keep</b>.</figcaption></figure>
+        <figure><img src="anh/buoc2-more-info.jpg" alt="Bước 2: bấm More info" loading="lazy"><figcaption><b>Bước 2.</b> Windows hiện cảnh báo: bấm chữ <b>More info</b>.</figcaption></figure>
+        <figure><img src="anh/buoc3-run-anyway.jpg" alt="Bước 3: bấm Run anyway" loading="lazy"><figcaption><b>Bước 3.</b> Bấm nút <b>Run anyway</b> là app chạy.</figcaption></figure>
+      </div>
+    </div>
   </section>
 
   <section>
