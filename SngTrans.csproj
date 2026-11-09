@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>SngTrans</AssemblyName>
+    <RootNamespace>SngTrans</RootNamespace>
+    <Version>2.0.0</Version>
+    <ApplicationIcon>icon.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <DebugType>none</DebugType>
+    <TieredPGO>false</TieredPGO>
+    <!-- Tiết kiệm RAM: không tạo luồng GC nền, dùng GC workstation, nén bớt heap khi rảnh -->
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <ServerGarbageCollector>false</ServerGarbageCollector>
+    <UseSystemResourceKeys>false</UseSystemResourceKeys>
+    <TieredCompilationQuickJitForLoops>true</TieredCompilationQuickJitForLoops>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <!-- .NET 10 WinForms: bỏ các cảnh báo dành cho trình thiết kế (app này không dùng Designer) -->
+    <NoWarn>$(NoWarn);WFO1000;WFO0003</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <RuntimeHostConfigurationOption Include="System.GC.ConserveMemory" Value="7" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="tests/**" />
+    <Compile Remove="dist/**" />
+    <EmbeddedResource Remove="tests/**" />
+    <None Remove="tests/**" />
+  </ItemGroup>
+
+</Project>
