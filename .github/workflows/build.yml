@@ -1,0 +1,59 @@
+name: Build Windows exe
+on:
+  push:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Số phiên bản muốn phát hành, ví dụ 2.1.0 (để trống = chỉ build thử, không đăng)"
+        required: false
+        default: ""
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: "10.0.x" }
+
+      - name: Lay so phien ban
+        id: ver
+        shell: pwsh
+        run: |
+          $v = "2.0.0"; $release = "false"
+          $input = "${{ github.event.inputs.version }}".Trim().TrimStart("v")
+          if ($input -ne "") { $v = $input; $release = "true" }
+          elseif ("${{ github.ref }}" -like "refs/tags/v*") { $v = "${{ github.ref_name }}".TrimStart("v"); $release = "true" }
+          "v=$v" >> $env:GITHUB_OUTPUT
+          "release=$release" >> $env:GITHUB_OUTPUT
+
+      - name: Ban nhe (can .NET 10 Desktop Runtime)
+        run: dotnet publish SngTrans.csproj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -p:PublishReadyToRun=true -p:Version=${{ steps.ver.outputs.v }} -o dist/nhe
+
+      - name: Ban day du (tu chua .NET)
+        run: dotnet publish SngTrans.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:PublishReadyToRun=true -p:EnableCompressionInSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:Version=${{ steps.ver.outputs.v }} -o dist/day-du
+
+      - uses: actions/upload-artifact@v4
+        with: { name: SngTrans-nhe, path: dist/nhe/SngTrans.exe }
+      - uses: actions/upload-artifact@v4
+        with: { name: SngTrans-day-du, path: dist/day-du/SngTrans.exe }
+
+      - name: Dat ten file de dang len Release
+        if: steps.ver.outputs.release == 'true'
+        shell: pwsh
+        run: |
+          Copy-Item dist/nhe/SngTrans.exe SngTrans-nhe.exe
+          Copy-Item dist/day-du/SngTrans.exe SngTrans-day-du.exe
+
+      - name: Dang Release (app tren may nguoi dung se tu bao cap nhat)
+        if: steps.ver.outputs.release == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.ver.outputs.v }}
+          target_commitish: ${{ github.sha }}
+          name: SngTrans v${{ steps.ver.outputs.v }}
+          generate_release_notes: true
+          files: |
+            SngTrans-nhe.exe
+            SngTrans-day-du.exe
