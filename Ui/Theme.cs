@@ -35,6 +35,29 @@ public static class Theme
     public static readonly Color SubLabel = C("#8b94ad");
     public static readonly Color Section = C("#6f7fa8");
 
+    /// <summary>Bảng màu nền sáng kiểu Windows 11 (hộp Cài đặt).</summary>
+    public static class Light
+    {
+        public static readonly Color Bg = C("#f3f3f3");
+        public static readonly Color Card = C("#ffffff");
+        public static readonly Color Border = C("#e3e3e3");
+        public static readonly Color NavSel = C("#e6e6e6");
+        public static readonly Color NavHover = C("#ebebeb");
+        public static readonly Color Text = C("#1b1b1b");
+        public static readonly Color Sub = C("#5f5f5f");
+        public static readonly Color Muted = C("#8a8a8a");
+        public static readonly Color Accent = C("#0f6cbd");
+        public static readonly Color AccentHover = C("#115ea3");
+        public static readonly Color Field = C("#fbfbfb");
+        public static readonly Color FieldHover = C("#f0f0f0");
+        public static readonly Color FieldBorder = C("#d1d1d1");
+        public static readonly Color Danger = C("#c42b1c");
+        public static readonly Color DangerBack = C("#fde7e9");
+        public static readonly Color Info = C("#eaf3fc");
+        public static readonly Color InfoBorder = C("#c4dcf2");
+        public static readonly Color Ok = C("#0f7b0f");
+    }
+
     static readonly string[] UiFamilies = { "Segoe UI Variable Text", "Segoe UI", "Inter", "Helvetica Neue", "Arial" };
     static string? _ui, _icon;
     static readonly Dictionary<(int, bool, string), Font> Cache = new();
@@ -84,7 +107,9 @@ public static class Theme
 
     // Ký tự trong phông biểu tượng
     public const string GCancel = "\uE711", GPin = "\uE718", GVolume = "\uE767", GCopy = "\uE8C8",
-        GCheck = "\uE73E", GChevron = "\uE70D", GForward = "\uE72A", GDelete = "\uE74D";
+        GCheck = "\uE73E", GChevron = "\uE70D", GForward = "\uE72A", GDelete = "\uE74D",
+        GSettings = "\uE713", GBlock = "\uE733", GNote = "\uE736", GPower = "\uE7E8", GGlobe = "\uE774",
+        GCursor = "\uE8B3", GSwap = "\uE8AB", GKeyboard = "\uE765", GPlay = "\uE768", GEdit = "\uE70F", GInfo = "\uE946";
 
     /// <summary>Biểu tượng ứng dụng: ô vuông bo góc xanh với chữ A trắng.</summary>
     public static Bitmap LogoBitmap(int size)

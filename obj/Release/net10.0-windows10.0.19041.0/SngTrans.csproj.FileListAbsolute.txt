@@ -1,0 +1,15 @@
+C:\Users\LENOVO\Desktop\app\SngTrans-main\bin\run\SngTrans.exe
+C:\Users\LENOVO\Desktop\app\SngTrans-main\bin\run\SngTrans.deps.json
+C:\Users\LENOVO\Desktop\app\SngTrans-main\bin\run\SngTrans.runtimeconfig.json
+C:\Users\LENOVO\Desktop\app\SngTrans-main\bin\run\SngTrans.dll
+C:\Users\LENOVO\Desktop\app\SngTrans-main\bin\run\Microsoft.Windows.SDK.NET.dll
+C:\Users\LENOVO\Desktop\app\SngTrans-main\bin\run\WinRT.Runtime.dll
+C:\Users\LENOVO\Desktop\app\SngTrans-main\obj\Release\net10.0-windows10.0.19041.0\SngTrans.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\LENOVO\Desktop\app\SngTrans-main\obj\Release\net10.0-windows10.0.19041.0\SngTrans.AssemblyInfoInputs.cache
+C:\Users\LENOVO\Desktop\app\SngTrans-main\obj\Release\net10.0-windows10.0.19041.0\SngTrans.AssemblyInfo.cs
+C:\Users\LENOVO\Desktop\app\SngTrans-main\obj\Release\net10.0-windows10.0.19041.0\SngTrans.csproj.CoreCompileInputs.cache
+C:\Users\LENOVO\Desktop\app\SngTrans-main\obj\Release\net10.0-windows10.0.19041.0\SngTrans.csproj.Up2Date
+C:\Users\LENOVO\Desktop\app\SngTrans-main\obj\Release\net10.0-windows10.0.19041.0\SngTrans.dll
+C:\Users\LENOVO\Desktop\app\SngTrans-main\obj\Release\net10.0-windows10.0.19041.0\refint\SngTrans.dll
+C:\Users\LENOVO\Desktop\app\SngTrans-main\obj\Release\net10.0-windows10.0.19041.0\SngTrans.genruntimeconfig.cache
+C:\Users\LENOVO\Desktop\app\SngTrans-main\obj\Release\net10.0-windows10.0.19041.0\ref\SngTrans.dll

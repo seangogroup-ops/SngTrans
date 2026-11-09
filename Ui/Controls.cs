@@ -92,6 +92,9 @@ public sealed class Pill : Ctl
     public float FontPx = 14;
     public bool AutoWidth = true;
     public Color Bg = Theme.PillBg, BgHover = Theme.PillHover;
+    /// <summary>Kiểu gọn (nền sáng): không cờ, chữ canh trái, có viền và mũi tên.</summary>
+    public bool Compact;
+    public Color Fore = Color.White, Chevron = Theme.Muted, Border = Color.Empty;
 
     public void SetLang(string code, string name, string? flag)
     {
@@ -110,14 +113,22 @@ public sealed class Pill : Ctl
     {
         var g = e.Graphics;
         g.SmoothingMode = SmoothingMode.AntiAlias;
-        Gfx.FillRound(g, Hover ? BgHover : Bg, new RectangleF(0, 0, Width, Height), Px(11));
-        int fw = Px(22), fh = Px(15);
-        g.DrawImageUnscaled(Flags.Get(FlagCode, fw, fh), Px(9), (Height - fh) / 2);
-        int tx = Px(9 + 22 + 8);
+        float rad = Px(Compact ? 6 : 11);
+        Gfx.FillRound(g, Hover ? BgHover : Bg, new RectangleF(0, 0, Width, Height), rad);
+        if (!Border.IsEmpty)
+            Gfx.DrawRound(g, Border, new RectangleF(0.5f, 0.5f, Width - 1, Height - 1), rad);
+        int tx;
+        if (Compact) tx = Px(12);
+        else
+        {
+            int fw = Px(22), fh = Px(15);
+            g.DrawImageUnscaled(Flags.Get(FlagCode, fw, fh), Px(9), (Height - fh) / 2);
+            tx = Px(9 + 22 + 8);
+        }
         Gfx.Text(g, LangName, Theme.Ui(FontPx, false, S), new Rectangle(tx, 0, Math.Max(1, Width - tx - Px(28)), Height),
-            Color.White, Gfx.Single | TextFormatFlags.EndEllipsis);
+            Fore, Gfx.Single | TextFormatFlags.EndEllipsis);
         var ic = Theme.Icon(11, S);
-        Gfx.Text(g, Theme.GChevron, ic, new Rectangle(Width - Px(9 + 14), 0, Px(14), Height), Theme.Muted,
+        Gfx.Text(g, Theme.GChevron, ic, new Rectangle(Width - Px(9 + 14), 0, Px(14), Height), Chevron,
             Gfx.Single | TextFormatFlags.HorizontalCenter);
     }
 }
@@ -127,6 +138,7 @@ public sealed class Toggle : Ctl
 {
     bool _on;
     public event EventHandler? CheckedChanged;
+    public Color OnBack = Theme.Accent, OffBack = Theme.C("#2f3b60"), OnKnob = Color.White, OffKnob = Color.White, OffBorder = Color.Empty;
 
     public bool Checked
     {
@@ -144,10 +156,13 @@ public sealed class Toggle : Ctl
     {
         var g = e.Graphics;
         g.SmoothingMode = SmoothingMode.AntiAlias;
-        Gfx.FillRound(g, _on ? Theme.Accent : Theme.C("#2f3b60"), new RectangleF(0, 0, Width, Height), Height / 2f);
-        int d = Height - Px(6);
-        using var b = new SolidBrush(Color.White);
-        g.FillEllipse(b, _on ? Width - d - Px(3) : Px(3), Px(3), d, d);
+        Gfx.FillRound(g, _on ? OnBack : OffBack, new RectangleF(0, 0, Width, Height), Height / 2f);
+        if (!_on && !OffBorder.IsEmpty)
+            Gfx.DrawRound(g, OffBorder, new RectangleF(0.5f, 0.5f, Width - 1, Height - 1), (Height - 1) / 2f);
+        int m = OffBorder.IsEmpty ? 3 : 4;
+        int d = Height - Px(2 * m);
+        using var b = new SolidBrush(_on ? OnKnob : OffKnob);
+        g.FillEllipse(b, _on ? Width - d - Px(m) : Px(m), Px(m), d, d);
     }
 }
 
@@ -338,6 +353,15 @@ public sealed class FieldBox : Ctl
     public readonly TextBox Inner = new();
     public float FontPx = 14;
     public string Placeholder = "";
+    public Color Fill = Theme.Field, Border = Theme.FieldBorder, FocusBorder = Theme.Accent, Fore = Color.White;
+
+    /// <summary>Áp lại màu sau khi đổi Fill/Fore (dùng cho nền sáng).</summary>
+    public void ApplyColors()
+    {
+        Inner.BackColor = Fill;
+        Inner.ForeColor = Fore;
+        Invalidate();
+    }
 
     public FieldBox()
     {
@@ -368,19 +392,24 @@ public sealed class FieldBox : Ctl
         var g = e.Graphics;
         g.SmoothingMode = SmoothingMode.AntiAlias;
         var r = new RectangleF(0.5f, 0.5f, Width - 1, Height - 1);
-        Gfx.FillRound(g, Theme.Field, r, Px(10));
-        Gfx.DrawRound(g, Inner.Focused ? Theme.Accent : Theme.FieldBorder, r, Px(10), Inner.Focused ? 1.5f : 1f);
+        Gfx.FillRound(g, Fill, r, Px(10));
+        Gfx.DrawRound(g, Inner.Focused ? FocusBorder : Border, r, Px(10), Inner.Focused ? 1.5f : 1f);
     }
 }
 
 /// <summary>Panel cuộn dọc có thanh cuộn tối.</summary>
 public sealed class ScrollPage : Panel
 {
-    public ScrollPage()
+    readonly bool _light;
+
+    public ScrollPage() : this(Theme.Bg, false) { }
+
+    public ScrollPage(Color back, bool light)
     {
         AutoScroll = true;
         DoubleBuffered = true;
-        BackColor = Theme.Bg;
+        BackColor = back;
+        _light = light;
     }
 
     protected override CreateParams CreateParams
@@ -406,7 +435,7 @@ public sealed class ScrollPage : Panel
     protected override void OnHandleCreated(EventArgs e)
     {
         base.OnHandleCreated(e);
-        Win32.DarkScrollbars(Handle);
+        if (_light) Win32.LightScrollbars(Handle); else Win32.DarkScrollbars(Handle);
     }
 
     /// <summary>Đặt chiều cao nội dung, giữ nguyên vị trí cuộn.</summary>

@@ -13,6 +13,25 @@ public sealed class LangList : Ctl
 
     List<Row> _rows = new();
     int _scroll, _sel = -1, _hover = -1;
+    Color _bg = Theme.PickerBg, _selBg = Theme.C("#232f5c"), _hoverBg = Theme.C("#1b2548"), _fore = Theme.C("#f1f4ff"),
+          _muted = Theme.C("#7c88aa"), _sep = Color.FromArgb(22, 255, 255, 255), _thumb = Theme.C("#34415f");
+
+    /// <summary>Đổi bảng màu: sáng (hộp Cài đặt) hoặc tối (thẻ dịch).</summary>
+    public void SetLight(bool light)
+    {
+        if (light)
+        {
+            _bg = Theme.Light.Card; _selBg = Theme.C("#e1ecf7"); _hoverBg = Theme.Light.FieldHover; _fore = Theme.Light.Text;
+            _muted = Theme.Light.Muted; _sep = Color.FromArgb(30, 0, 0, 0); _thumb = Theme.C("#c1c1c1");
+        }
+        else
+        {
+            _bg = Theme.PickerBg; _selBg = Theme.C("#232f5c"); _hoverBg = Theme.C("#1b2548"); _fore = Theme.C("#f1f4ff");
+            _muted = Theme.C("#7c88aa"); _sep = Color.FromArgb(22, 255, 255, 255); _thumb = Theme.C("#34415f");
+        }
+        BackColor = _bg;
+        Invalidate();
+    }
     public event Action<string>? Picked;
 
     int RowH(Row r) => r.Separator ? Px(10) : Px(40);
@@ -91,7 +110,7 @@ public sealed class LangList : Ctl
     protected override void OnPaint(PaintEventArgs e)
     {
         var g = e.Graphics;
-        g.Clear(Theme.PickerBg);
+        g.Clear(_bg);
         g.SmoothingMode = SmoothingMode.AntiAlias;
         int y = -_scroll;
         for (int i = 0; i < _rows.Count; i++)
@@ -102,21 +121,21 @@ public sealed class LangList : Ctl
             {
                 var rect = new Rectangle(0, y, Width, h);
                 if (r.Info)
-                    Gfx.Text(g, r.Name, Theme.Ui(14, false, S), new Rectangle(Px(14), y, Width - Px(28), h), Theme.C("#7c88aa"), Gfx.Single);
+                    Gfx.Text(g, r.Name, Theme.Ui(14, false, S), new Rectangle(Px(14), y, Width - Px(28), h), _muted, Gfx.Single);
                 else if (r.Separator)
-                    using (var b = new SolidBrush(Color.FromArgb(22, 255, 255, 255)))
+                    using (var b = new SolidBrush(_sep))
                         g.FillRectangle(b, Px(6), y + h / 2, Width - Px(12), 1);
                 else
                 {
                     if (i == _sel || i == _hover)
-                        Gfx.FillRound(g, i == _sel ? Theme.C("#232f5c") : Theme.C("#1b2548"),
+                        Gfx.FillRound(g, i == _sel ? _selBg : _hoverBg,
                             new RectangleF(Px(2), y + 1, Width - Px(4), h - 2), Px(10));
                     int fw = Px(22), fh = Px(15);
                     g.DrawImageUnscaled(Flags.Get(r.Code == "auto" ? null : r.Code, fw, fh), Px(12), y + (h - fh) / 2);
                     Gfx.Text(g, r.Name, Theme.Ui(15, r.Current, S), new Rectangle(Px(46), y, Width - Px(46 + 70), h),
-                        Theme.C("#f1f4ff"), Gfx.Single | TextFormatFlags.EndEllipsis);
+                        _fore, Gfx.Single | TextFormatFlags.EndEllipsis);
                     Gfx.Text(g, r.Code == "auto" ? "AUTO" : r.Code.ToUpperInvariant(), Theme.Ui(12, false, S),
-                        new Rectangle(Width - Px(72), y, Px(60), h), Theme.C("#7c88aa"), Gfx.Single | TextFormatFlags.Right);
+                        new Rectangle(Width - Px(72), y, Px(60), h), _muted, Gfx.Single | TextFormatFlags.Right);
                 }
             }
             y += h;
@@ -125,7 +144,7 @@ public sealed class LangList : Ctl
         {
             float th = Math.Max(Px(28), Height * (float)Height / ContentH);
             float ty = MaxScroll == 0 ? 0 : (Height - th) * _scroll / MaxScroll;
-            Gfx.FillRound(g, Theme.C("#34415f"), new RectangleF(Width - Px(6), ty, Px(4), th), Px(2));
+            Gfx.FillRound(g, _thumb, new RectangleF(Width - Px(6), ty, Px(4), th), Px(2));
         }
     }
 }
@@ -142,6 +161,25 @@ public sealed class LangPicker : Form
     string _current = "";
     float _s = 1f;
     int _shownAt;
+    bool _light;
+
+    /// <summary>Nền sáng cho hộp Cài đặt; mặc định tối cho thẻ dịch.</summary>
+    public bool Light
+    {
+        get => _light;
+        set
+        {
+            _light = value;
+            BackColor = value ? Theme.Light.Card : Theme.PickerBg;
+            _list.SetLight(value);
+            _search.Fill = value ? Theme.Light.Field : Theme.Field;
+            _search.Border = value ? Theme.Light.FieldBorder : Theme.FieldBorder;
+            _search.FocusBorder = value ? Theme.Light.Accent : Theme.Accent;
+            _search.Fore = value ? Theme.Light.Text : Color.White;
+            _search.ApplyColors();
+            if (IsHandleCreated) Win32.SetRoundedBorder(Handle, value ? 0xD1D1D1 : 0x4A3A22);
+        }
+    }
 
     public LangPicker()
     {
@@ -173,7 +211,7 @@ public sealed class LangPicker : Form
     protected override void OnHandleCreated(EventArgs e)
     {
         base.OnHandleCreated(e);
-        Win32.SetRoundedBorder(Handle, 0x4A3A22);
+        Win32.SetRoundedBorder(Handle, _light ? 0xD1D1D1 : 0x4A3A22);
     }
 
     /// <summary>entries: (mã, tên); mã "auto" hiện cờ địa cầu.</summary>
@@ -250,6 +288,6 @@ public sealed class LangPicker : Form
         var g = e.Graphics;
         g.SmoothingMode = SmoothingMode.AntiAlias;
         if (!Win32.IsWin11)
-            Gfx.DrawRound(g, Color.FromArgb(70, 255, 255, 255), new RectangleF(0.5f, 0.5f, Width - 1, Height - 1), Math.Max(2, (int)(14 * _s)));
+            Gfx.DrawRound(g, _light ? Color.FromArgb(60, 0, 0, 0) : Color.FromArgb(70, 255, 255, 255), new RectangleF(0.5f, 0.5f, Width - 1, Height - 1), Math.Max(2, (int)(14 * _s)));
     }
 }

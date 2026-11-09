@@ -228,6 +228,29 @@ public static class Win32
         catch { }
     }
 
+    /// <summary>Thanh tiêu đề sáng, cùng màu nền cửa sổ (Win11). Lỗi thì bỏ qua.</summary>
+    public static void SetLightTitlebar(IntPtr hwnd, int captionRef = 0xF3F3F3, int textRef = 0x1B1B1B)
+    {
+        if (hwnd == IntPtr.Zero) return;
+        try
+        {
+            int zero = 0;
+            foreach (var attr in new[] { 20, 19 })          // DWMWA_USE_IMMERSIVE_DARK_MODE = tắt
+                if (DwmSetWindowAttribute(hwnd, attr, ref zero, 4) == 0) break;
+            int col = captionRef;                            // DWMWA_CAPTION_COLOR (COLORREF 0x00BBGGRR)
+            DwmSetWindowAttribute(hwnd, 35, ref col, 4);
+            int txt = textRef;                               // DWMWA_TEXT_COLOR
+            DwmSetWindowAttribute(hwnd, 36, ref txt, 4);
+        }
+        catch { }
+    }
+
+    /// <summary>Thanh cuộn sáng (kiểu Explorer) cho điều khiển.</summary>
+    public static void LightScrollbars(IntPtr hwnd)
+    {
+        try { SetWindowTheme(hwnd, "Explorer", null); } catch { }
+    }
+
     /// <summary>Win11: bo góc hệ thống và viền màu cho cửa sổ không khung.</summary>
     public static void SetRoundedBorder(IntPtr hwnd, int borderColorRef)
     {

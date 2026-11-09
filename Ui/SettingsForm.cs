@@ -1,5 +1,6 @@
 using System.Drawing.Drawing2D;
 using System.Runtime.InteropServices;
+using Lt = SngTrans.Ui.Theme.Light;
 
 namespace SngTrans.Ui;
 
@@ -27,17 +28,40 @@ sealed class Lbl : Label
         Math.Max(Font.Height, Gfx.Measure(Text, Font, Math.Max(10, width)).Height) + 1;
 }
 
-/// <summary>Một hàng cài đặt: tiêu đề + mô tả bên trái, điều khiển bên phải (hoặc bên dưới nếu Stacked).</summary>
-sealed class RowCtl : Ctl, ILayoutRow
+/// <summary>Thẻ trắng bo góc có biểu tượng bên trái (nền chung cho mọi hàng cài đặt).</summary>
+abstract class CardCtl : Ctl
+{
+    protected string IconGlyph = "";
+    protected int IconCy = -1;           // tâm dọc của biểu tượng (px), -1 = giữa thẻ
+
+    protected void PaintCard(Graphics g)
+    {
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        var r = new RectangleF(0.5f, 0.5f, Width - 1, Height - 1);
+        Gfx.FillRound(g, Lt.Card, r, Px(8));
+        Gfx.DrawRound(g, Lt.Border, r, Px(8));
+        if (IconGlyph.Length > 0)
+        {
+            int cy = IconCy >= 0 ? IconCy : Height / 2;
+            Gfx.Text(g, IconGlyph, Theme.Icon(18, S), new Rectangle(Px(16), cy - Px(14), Px(26), Px(28)), Lt.Accent,
+                Gfx.Single | TextFormatFlags.HorizontalCenter);
+        }
+    }
+
+    protected override void OnPaint(PaintEventArgs e) => PaintCard(e.Graphics);
+}
+
+/// <summary>Một hàng cài đặt: biểu tượng, tiêu đề + mô tả bên trái, điều khiển bên phải.</summary>
+sealed class SettingRow : CardCtl, ILayoutRow
 {
     readonly Lbl _title, _sub;
     readonly Control _right;
-    public bool Stacked;
 
-    public RowCtl(string title, string sub, Control right)
+    public SettingRow(string glyph, string title, string sub, Control right)
     {
-        _title = new Lbl(title, 14, Theme.Label);
-        _sub = new Lbl(sub, 12, Theme.SubLabel);
+        IconGlyph = glyph;
+        _title = new Lbl(title, 14, Lt.Text);
+        _sub = new Lbl(sub, 12, Lt.Sub);
         _right = right;
         Controls.Add(_title);
         if (sub.Length > 0) Controls.Add(_sub);
@@ -49,90 +73,26 @@ sealed class RowCtl : Ctl, ILayoutRow
         S = s;
         _title.Restyle(14, false, s);
         _sub.Restyle(12, false, s);
-        int vpad = Px(12);
-        int rightW = Stacked ? 0 : _right.Width + Px(12);
-        int textW = width - rightW;
+        int padL = Px(50), padR = Px(14), vpad = Px(10);
+        int textW = Math.Max(Px(80), width - padL - padR - _right.Width - Px(16));
         int th = _title.HeightFor(textW);
         int sh = _sub.Text.Length > 0 ? _sub.HeightFor(textW) : 0;
         int textH = th + (sh > 0 ? sh + Px(1) : 0);
-        int h;
-        if (Stacked)
-        {
-            _title.SetBounds(0, vpad, textW, th);
-            _sub.SetBounds(0, vpad + th + Px(1), textW, sh);
-            _right.Location = new Point(0, vpad + textH + Px(8));
-            h = vpad + textH + Px(8) + _right.Height + vpad;
-        }
-        else
-        {
-            h = Math.Max(textH, _right.Height) + 2 * vpad;
-            _title.SetBounds(0, (h - textH) / 2, textW, th);
-            _sub.SetBounds(0, (h - textH) / 2 + th + Px(1), textW, sh);
-            _right.Location = new Point(width - _right.Width, (h - _right.Height) / 2);
-        }
+        int h = Math.Max(Math.Max(textH, _right.Height) + 2 * vpad, Px(52));
+        _title.SetBounds(padL, (h - textH) / 2, textW, th);
+        _sub.SetBounds(padL, (h - textH) / 2 + th + Px(1), textW, sh);
+        _right.Location = new Point(width - padR - _right.Width, (h - _right.Height) / 2);
         Size = new Size(width, h);
+        IconCy = h / 2;
         return h;
     }
 }
 
-/// <summary>Khối có tiêu đề nhỏ viết hoa và thẻ bo góc chứa các hàng.</summary>
-sealed class Section : Ctl
-{
-    readonly Lbl _head;
-    readonly List<Control> _rows;
-    readonly List<int> _lines = new();
-    int _cardTop, _cardH;
-
-    public Section(string title, params Control[] rows)
-    {
-        _head = new Lbl(title.ToUpperInvariant(), 11, Theme.Section, true);
-        _rows = rows.ToList();
-        Controls.Add(_head);
-        foreach (var r in rows) Controls.Add(r);
-    }
-
-    public int DoLayout(int width, float s)
-    {
-        S = s;
-        _head.Restyle(11, true, s);
-        int hh = _head.Font.Height + 2;
-        _head.SetBounds(0, 0, width, hh);
-        _cardTop = hh + Px(7);
-        int padX = Px(16);
-        int y = _cardTop + Px(2);
-        _lines.Clear();
-        for (int i = 0; i < _rows.Count; i++)
-        {
-            if (i > 0) { _lines.Add(y); y += 1; }
-            var r = _rows[i];
-            int rh = r is ILayoutRow lr ? lr.DoLayout(width - 2 * padX, s) : r.Height;
-            r.SetBounds(padX, y, width - 2 * padX, rh);
-            y += rh;
-        }
-        y += Px(2);
-        _cardH = y - _cardTop;
-        Size = new Size(width, y);
-        Invalidate();
-        return y;
-    }
-
-    protected override void OnPaint(PaintEventArgs e)
-    {
-        var g = e.Graphics;
-        g.SmoothingMode = SmoothingMode.AntiAlias;
-        var r = new RectangleF(0.5f, _cardTop + 0.5f, Width - 1, _cardH - 1);
-        Gfx.FillRound(g, Theme.Card, r, Px(14));
-        Gfx.DrawRound(g, Theme.Line, r, Px(14));
-        using var b = new SolidBrush(Theme.Line);
-        foreach (var y in _lines) g.FillRectangle(b, Px(16), y, Width - Px(32), 1);
-    }
-}
-
-/// <summary>Khung thông báo xanh (lời chào lần đầu).</summary>
+/// <summary>Khung thông báo (lời chào lần đầu).</summary>
 sealed class InfoBox : Ctl, ILayoutRow
 {
-    readonly Lbl _a = new("Chào mừng bạn!", 14, Color.White, true);
-    readonly Lbl _b = new("Chọn ngôn ngữ bên dưới (mặc định Việt ↔ Anh), rồi bôi đen chữ ở bất kỳ đâu để dịch.", 13, Theme.C("#cfe0ff"));
+    readonly Lbl _a = new("Chào mừng bạn!", 14, Lt.Text, true);
+    readonly Lbl _b = new("Chọn ngôn ngữ bên dưới (mặc định Việt ↔ Anh), rồi bôi đen chữ ở bất kỳ đâu để dịch.", 13, Lt.Sub);
 
     public InfoBox() { Controls.Add(_a); Controls.Add(_b); }
 
@@ -141,61 +101,105 @@ sealed class InfoBox : Ctl, ILayoutRow
         S = s;
         _a.Restyle(14, true, s);
         _b.Restyle(13, false, s);
-        int pad = Px(14), v = Px(10);
-        int ah = _a.HeightFor(width - 2 * pad), bh = _b.HeightFor(width - 2 * pad);
-        _a.SetBounds(pad, v, width - 2 * pad, ah);
-        _b.SetBounds(pad, v + ah + Px(2), width - 2 * pad, bh);
+        int padL = Px(54), padR = Px(16), v = Px(12);
+        int tw = width - padL - padR;
+        int ah = _a.HeightFor(tw), bh = _b.HeightFor(tw);
+        _a.SetBounds(padL, v, tw, ah);
+        _b.SetBounds(padL, v + ah + Px(2), tw, bh);
         Size = new Size(width, v * 2 + ah + bh + Px(2));
         return Height;
     }
 
     protected override void OnPaint(PaintEventArgs e)
     {
-        e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        var g = e.Graphics;
+        g.SmoothingMode = SmoothingMode.AntiAlias;
         var r = new RectangleF(0.5f, 0.5f, Width - 1, Height - 1);
-        Gfx.FillRound(e.Graphics, Theme.C("#10244a"), r, Px(12));
-        Gfx.DrawRound(e.Graphics, Theme.C("#1e3a6e"), r, Px(12));
+        Gfx.FillRound(g, Lt.Info, r, Px(8));
+        Gfx.DrawRound(g, Lt.InfoBorder, r, Px(8));
+        Gfx.Text(g, Theme.GInfo, Theme.Icon(18, S), new Rectangle(Px(16), Px(10), Px(26), Px(28)), Lt.Accent,
+            Gfx.Single | TextFormatFlags.HorizontalCenter);
     }
 }
 
-/// <summary>Hàng chọn hai ngôn ngữ (mẹ đẻ ⇄ ngoại ngữ) và nút khôi phục mặc định.</summary>
-sealed class LangRow : Ctl, ILayoutRow
+/// <summary>Hàng chọn hai ngôn ngữ (mẹ đẻ ⇄ ngoại ngữ); nút khôi phục chỉ hiện khi khác mặc định.</summary>
+sealed class LangRow : CardCtl, ILayoutRow
 {
-    public readonly Pill Native = new() { AutoWidth = false, FontPx = 14, Bg = Theme.Field, BgHover = Theme.FieldHover };
-    public readonly Pill Foreign = new() { AutoWidth = false, FontPx = 14, Bg = Theme.Field, BgHover = Theme.FieldHover };
-    public readonly FlatBtn Swap = new() { Glyph = "⇄", Back = Theme.Field, HoverBack = Theme.FieldHover, Fore = Theme.C("#9fb0d9"), HoverFore = Color.White, Cursor = Cursors.Hand };
-    public readonly FlatBtn Reset = new() { Caption = "Khôi phục mặc định: Tiếng Việt ↔ English", LeftAlign = true, Fore = Theme.C("#60a5fa"), HoverFore = Theme.C("#93c5fd"), HoverBack = Color.Empty, Cursor = Cursors.Hand, FontPx = 13 };
-    readonly Lbl _l1 = new("Tiếng mẹ đẻ", 12, Theme.SubLabel), _l2 = new("Ngoại ngữ", 12, Theme.SubLabel);
+    public readonly Pill Native = MakePill(), Foreign = MakePill();
+    public readonly FlatBtn Swap = new()
+    {
+        Glyph = Theme.GSwap, IconPx = 14, Radius = 6, Back = Color.Empty, HoverBack = Lt.FieldHover,
+        Fore = Lt.Sub, HoverFore = Lt.Text, Cursor = Cursors.Hand,
+    };
+    public readonly FlatBtn Reset = new()
+    {
+        Caption = "Khôi phục mặc định: Tiếng Việt ↔ English", LeftAlign = true, Fore = Lt.Accent, HoverFore = Lt.AccentHover,
+        HoverBack = Color.Empty, Cursor = Cursors.Hand, FontPx = 12, Visible = false,
+    };
+    readonly Lbl _title = new("Ngôn ngữ", 14, Lt.Text), _sub = new("Tiếng mẹ đẻ và ngoại ngữ", 12, Lt.Sub);
+
+    public bool ShowReset { get => Reset.Visible; set => Reset.Visible = value; }
+
+    static Pill MakePill() => new()
+    {
+        AutoWidth = false, Compact = true, FontPx = 13, Fore = Lt.Text, Bg = Lt.Field, BgHover = Lt.FieldHover,
+        Border = Lt.FieldBorder, Chevron = Lt.Sub, Cursor = Cursors.Hand,
+    };
 
     public LangRow()
     {
-        Native.Cursor = Foreign.Cursor = Cursors.Hand;
-        Controls.AddRange(new Control[] { _l1, _l2, Native, Foreign, Swap, Reset });
+        IconGlyph = Theme.GGlobe;
+        Controls.AddRange(new Control[] { _title, _sub, Native, Foreign, Swap, Reset });
     }
 
     public int DoLayout(int width, float s)
     {
         S = s;
         foreach (var c in new Ctl[] { Native, Foreign, Swap, Reset }) c.S = s;
-        _l1.Restyle(12, false, s); _l2.Restyle(12, false, s);
-        Swap.IconPx = 16;
-        int top = Px(14), lh = _l1.Font.Height + 2, gap = Px(10), sw = Px(36), ph = Px(40);
-        int pw = (width - sw - 2 * gap) / 2;
-        _l1.SetBounds(0, top, pw, lh);
-        _l2.SetBounds(pw + gap + sw + gap, top, pw, lh);
-        int py = top + lh + Px(6);
-        Native.SetBounds(0, py, pw, ph);
-        Swap.SetBounds(pw + gap, py + (ph - sw) / 2, sw, sw);
-        Swap.Radius = sw / 2f;
-        Foreign.SetBounds(pw + gap + sw + gap, py, pw, ph);
-        Reset.SetBounds(0, py + ph + Px(6), width, Px(28));
-        int h = py + ph + Px(6) + Px(28) + Px(6);
+        _title.Restyle(14, false, s); _sub.Restyle(12, false, s);
+        int padL = Px(50), padR = Px(14), vpad = Px(10);
+        int pw = Px(108), sw = Px(28), ph = Px(30), gap = Px(4);
+        int ctlW = pw + gap + sw + gap + pw;
+        int textW = width - padL - padR - ctlW - Px(16);
+        bool stacked = textW < Px(150);
+        if (stacked) textW = width - padL - padR;
+        int th = _title.HeightFor(textW), sh = _sub.HeightFor(textW);
+        int textH = th + sh + Px(1);
+        int h, ctlY, ctlX;
+        if (!stacked)
+        {
+            int block = Math.Max(textH, ph);
+            _title.SetBounds(padL, vpad + (block - textH) / 2, textW, th);
+            _sub.SetBounds(padL, vpad + (block - textH) / 2 + th + Px(1), textW, sh);
+            ctlY = vpad + (block - ph) / 2;
+            ctlX = width - padR - ctlW;
+            h = vpad + block + vpad;
+            IconCy = vpad + block / 2;
+        }
+        else
+        {
+            _title.SetBounds(padL, vpad, textW, th);
+            _sub.SetBounds(padL, vpad + th + Px(1), textW, sh);
+            ctlY = vpad + textH + Px(10);
+            ctlX = padL;
+            h = ctlY + ph + vpad;
+            IconCy = vpad + textH / 2;
+        }
+        Native.SetBounds(ctlX, ctlY, pw, ph);
+        Swap.SetBounds(ctlX + pw + gap, ctlY + (ph - Px(28)) / 2, sw, Px(28));
+        Foreign.SetBounds(ctlX + pw + gap + sw + gap, ctlY, pw, ph);
+        if (Reset.Visible)
+        {
+            int ry = h - vpad + Px(2);
+            Reset.SetBounds(padL, ry, width - padL - padR, Px(22));
+            h = ry + Px(22) + Px(10);
+        }
         Size = new Size(width, h);
         return h;
     }
 }
 
-/// <summary>Công tắc/nút chọn phím tắt: bấm rồi nhấn tổ hợp phím mới. Esc huỷ, Backspace/Delete về mặc định.</summary>
+/// <summary>Ô chọn phím tắt: bấm rồi nhấn tổ hợp phím mới. Esc huỷ, Backspace/Delete về mặc định.</summary>
 sealed class HotkeyButton : Ctl
 {
     public string Value;
@@ -290,63 +294,99 @@ sealed class HotkeyButton : Ctl
         var g = e.Graphics;
         g.SmoothingMode = SmoothingMode.AntiAlias;
         var r = new RectangleF(0.5f, 0.5f, Width - 1, Height - 1);
-        Gfx.FillRound(g, Hover ? Theme.FieldHover : Theme.Field, r, Px(10));
-        Gfx.DrawRound(g, _capturing ? Theme.Accent : Theme.FieldBorder, r, Px(10));
+        Gfx.FillRound(g, Hover ? Lt.FieldHover : Lt.Field, r, Px(6));
+        Gfx.DrawRound(g, _capturing ? Lt.Accent : Lt.FieldBorder, r, Px(6), _capturing ? 1.5f : 1f);
         string text = _capturing ? (_hint.Length > 0 ? _hint : "Nhấn phím mới… (Esc: huỷ)") : HotkeySpec.Pretty(Value);
-        var font = _capturing ? Theme.Ui(13, false, S) : Theme.Mono(12, S);
-        Gfx.Text(g, text, font, new Rectangle(Px(12), 0, Width - Px(24), Height),
-            _capturing ? Theme.Link : Color.White, Gfx.Single | TextFormatFlags.HorizontalCenter);
+        Gfx.Text(g, text, Theme.Ui(13, false, S), new Rectangle(Px(12), 0, Width - Px(24), Height),
+            _capturing ? Lt.Accent : Lt.Text, Gfx.Single | TextFormatFlags.HorizontalCenter);
     }
 }
 
-/// <summary>Thanh chuyển trang: ba tab trong thẻ bo góc.</summary>
-sealed class TabBar : Ctl
+/// <summary>Thanh bên trái: menu dọc có vạch xanh ở mục đang chọn, nút "Tắt app" màu đỏ ở đáy.</summary>
+sealed class SideNav : Ctl
 {
-    readonly string[] _names;
-    int _sel, _hover = -1;
+    readonly (string Glyph, string Text)[] _items;
+    readonly (string Glyph, string Text) _footer;
+    readonly ToolTip _tip = new();
+    int _sel, _hover = -2;                 // -1 = không có, -2 = chưa rê, -3 = footer
+    public string FooterTip = "";
     public event Action<int>? Selected;
+    public event Action? FooterClicked;
 
-    public TabBar(params string[] names) { _names = names; Cursor = Cursors.Hand; }
-
-    int TabW(int i) => Gfx.TextWidth(_names[i], Theme.Ui(13, true, S)) + Px(40);
-    public int PreferredWidth => Enumerable.Range(0, _names.Length).Sum(TabW) + Px(4 * 2 + 4 * (_names.Length - 1));
-
-    int At(int x)
+    public SideNav((string, string)[] items, (string, string) footer)
     {
-        int cx = Px(4);
-        for (int i = 0; i < _names.Length; i++)
-        {
-            int w = TabW(i);
-            if (x >= cx && x < cx + w) return i;
-            cx += w + Px(4);
-        }
-        return -1;
+        _items = items;
+        _footer = footer;
+        Cursor = Cursors.Default;
     }
 
-    protected override void OnMouseMove(MouseEventArgs e) { _hover = At(e.X); Invalidate(); base.OnMouseMove(e); }
-    protected override void OnMouseLeave(EventArgs e) { _hover = -1; Invalidate(); base.OnMouseLeave(e); }
+    int ItemH => Px(36);
+    Rectangle ItemRect(int i) => new(Px(10), i * (ItemH + Px(2)), Width - Px(20), ItemH);
+    Rectangle FooterRect => new(Px(10), Height - ItemH, Width - Px(20), ItemH);
+
+    int At(Point p)
+    {
+        for (int i = 0; i < _items.Length; i++) if (ItemRect(i).Contains(p)) return i;
+        return FooterRect.Contains(p) ? -3 : -1;
+    }
+
+    protected override void OnMouseMove(MouseEventArgs e)
+    {
+        int h = At(e.Location);
+        if (h != _hover)
+        {
+            _hover = h;
+            Cursor = h == -1 ? Cursors.Default : Cursors.Hand;
+            _tip.SetToolTip(this, h == -3 ? FooterTip : "");
+            Invalidate();
+        }
+        base.OnMouseMove(e);
+    }
+
+    protected override void OnMouseLeave(EventArgs e) { _hover = -2; Invalidate(); base.OnMouseLeave(e); }
+
     protected override void OnMouseUp(MouseEventArgs e)
     {
-        int i = At(e.X);
-        if (i >= 0 && i != _sel) { _sel = i; Invalidate(); Selected?.Invoke(i); }
+        if (e.Button == MouseButtons.Left)
+        {
+            int h = At(e.Location);
+            if (h == -3) FooterClicked?.Invoke();
+            else if (h >= 0 && h != _sel) { _sel = h; Invalidate(); Selected?.Invoke(h); }
+        }
         base.OnMouseUp(e);
+    }
+
+    void DrawItem(Graphics g, Rectangle r, string glyph, string text, Color fore, Color iconFore)
+    {
+        Gfx.Text(g, glyph, Theme.Icon(16, S), new Rectangle(r.X + Px(10), r.Y, Px(26), r.Height), iconFore,
+            Gfx.Single | TextFormatFlags.HorizontalCenter);
+        Gfx.Text(g, text, Theme.Ui(14, false, S), new Rectangle(r.X + Px(44), r.Y, Math.Max(1, r.Width - Px(50)), r.Height), fore,
+            Gfx.Single | TextFormatFlags.EndEllipsis);
     }
 
     protected override void OnPaint(PaintEventArgs e)
     {
         var g = e.Graphics;
         g.SmoothingMode = SmoothingMode.AntiAlias;
-        Gfx.FillRound(g, Theme.Card, new RectangleF(0, 0, Width, Height), Px(12));
-        int cx = Px(4);
-        for (int i = 0; i < _names.Length; i++)
+        for (int i = 0; i < _items.Length; i++)
         {
-            int w = TabW(i);
-            var r = new Rectangle(cx, Px(4), w, Height - Px(8));
-            if (i == _sel) Gfx.FillRound(g, Theme.C("#2a3a6b"), r, Px(9));
-            Gfx.Text(g, _names[i], Theme.Ui(13, i == _sel, S), r, i == _sel ? Color.White : Theme.C("#9fb0d9"),
-                Gfx.Single | TextFormatFlags.HorizontalCenter);
-            cx += w + Px(4);
+            var r = ItemRect(i);
+            bool sel = i == _sel;
+            if (sel) Gfx.FillRound(g, Lt.NavSel, r, Px(6));
+            else if (i == _hover) Gfx.FillRound(g, Lt.NavHover, r, Px(6));
+            if (sel)
+                Gfx.FillRound(g, Lt.Accent, new RectangleF(r.X, r.Y + (r.Height - Px(16)) / 2f, Px(3), Px(16)), Px(2));
+            DrawItem(g, r, _items[i].Glyph, _items[i].Text, Lt.Text, sel ? Lt.Text : Lt.Sub);
         }
+        var fr = FooterRect;
+        if (_hover == -3) Gfx.FillRound(g, Lt.DangerBack, fr, Px(6));
+        DrawItem(g, fr, _footer.Glyph, _footer.Text, Lt.Danger, Lt.Danger);
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing) _tip.Dispose();
+        base.Dispose(disposing);
     }
 }
 
@@ -354,23 +394,27 @@ sealed class TabBar : Ctl
 sealed class VocabRow : Ctl, ILayoutRow
 {
     readonly Lbl _w, _t;
-    public readonly FlatBtn Speak = new() { Glyph = Theme.GVolume, IconPx = 16, Cursor = Cursors.Hand };
-    public readonly FlatBtn Copy = new() { Glyph = Theme.GCopy, IconPx = 16, Cursor = Cursors.Hand };
-    public readonly FlatBtn Delete = new() { Glyph = Theme.GDelete, IconPx = 16, Cursor = Cursors.Hand };
+    public readonly FlatBtn Speak = Icon(Theme.GVolume), Copy = Icon(Theme.GCopy), Delete = Icon(Theme.GDelete);
     readonly System.Windows.Forms.Timer _copied = new() { Interval = 1200 };
 
-    /// <summary>Báo đã chép: đổi sang dấu tích xanh một lúc rồi trả lại biểu tượng cũ.</summary>
+    static FlatBtn Icon(string glyph) => new()
+    {
+        Glyph = glyph, IconPx = 16, Radius = 6, Fore = Lt.Sub, HoverFore = Lt.Text, HoverBack = Lt.FieldHover, Cursor = Cursors.Hand,
+    };
+
+    /// <summary>Báo đã chép: đổi sang dấu tích một lúc rồi trả lại biểu tượng cũ.</summary>
     public void FlashCopied()
     {
-        Copy.Glyph = Theme.GCheck; Copy.Fore = Theme.C("#4ade80"); Copy.Invalidate();
+        Copy.Glyph = Theme.GCheck; Copy.Fore = Lt.Ok; Copy.Invalidate();
         _copied.Stop(); _copied.Start();
     }
 
     public VocabRow(VocabItem v)
     {
-        _copied.Tick += (_, _) => { _copied.Stop(); Copy.Glyph = Theme.GCopy; Copy.Fore = Theme.Muted; Copy.Invalidate(); };
-        _w = new Lbl(v.Text, 15, Color.White, true);
-        _t = new Lbl(v.Translation, 13, Theme.Link);
+        Delete.HoverFore = Lt.Danger; Delete.HoverBack = Lt.DangerBack;
+        _copied.Tick += (_, _) => { _copied.Stop(); Copy.Glyph = Theme.GCopy; Copy.Fore = Lt.Sub; Copy.Invalidate(); };
+        _w = new Lbl(v.Text, 15, Lt.Text, true);
+        _t = new Lbl(v.Translation, 13, Lt.Accent);
         Controls.AddRange(new Control[] { _w, _t, Speak, Copy, Delete });
     }
 
@@ -379,14 +423,14 @@ sealed class VocabRow : Ctl, ILayoutRow
         S = s;
         Speak.S = Copy.S = Delete.S = s;
         _w.Restyle(15, true, s); _t.Restyle(13, false, s);
-        int btn = Px(30), left = Px(14), tw = width - left - 3 * btn - Px(10);
+        int btn = Px(30), left = Px(16), tw = width - left - 3 * btn - Px(14);
         int wh = _w.HeightFor(tw), th = _t.HeightFor(tw);
-        int h = Math.Max(wh + th + Px(2), btn) + Px(20);
-        _w.SetBounds(left, Px(10), tw, wh);
-        _t.SetBounds(left, Px(10) + wh + Px(2), tw, th);
-        Speak.SetBounds(width - 3 * btn - Px(10), Px(6), btn, btn);
-        Copy.SetBounds(width - 2 * btn - Px(7), Px(6), btn, btn);
-        Delete.SetBounds(width - btn - Px(4), Px(6), btn, btn);
+        int h = Math.Max(wh + th + Px(2), btn) + Px(24);
+        _w.SetBounds(left, Px(12), tw, wh);
+        _t.SetBounds(left, Px(12) + wh + Px(2), tw, th);
+        Speak.SetBounds(width - 3 * btn - Px(12), Px(8), btn, btn);
+        Copy.SetBounds(width - 2 * btn - Px(9), Px(8), btn, btn);
+        Delete.SetBounds(width - btn - Px(6), Px(8), btn, btn);
         Size = new Size(width, h);
         return h;
     }
@@ -401,68 +445,44 @@ sealed class VocabRow : Ctl, ILayoutRow
     {
         e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
         var r = new RectangleF(0.5f, 0.5f, Width - 1, Height - 1);
-        Gfx.FillRound(e.Graphics, Theme.Card, r, Px(12));
-        Gfx.DrawRound(e.Graphics, Theme.Line, r, Px(12));
+        Gfx.FillRound(e.Graphics, Lt.Card, r, Px(8));
+        Gfx.DrawRound(e.Graphics, Lt.Border, r, Px(8));
     }
 }
 
-/// <summary>Danh sách app bị chặn.</summary>
-sealed class BlockedList : Ctl, ILayoutRow
+/// <summary>Một app bị chặn: tên file .exe và nút bỏ chặn.</summary>
+sealed class BlockedRow : CardCtl, ILayoutRow
 {
-    readonly List<Control> _kids = new();
-    readonly IReadOnlyList<string> _apps;
-    readonly Action<string> _unblock;
-
-    public BlockedList(IReadOnlyList<string> apps, Action<string> unblock)
+    readonly Lbl _name;
+    readonly FlatBtn _x = new()
     {
-        _apps = apps;
-        _unblock = unblock;
-        if (apps.Count == 0)
-            Add(new Lbl("Chưa chặn app nào.\nTick “Không dịch app này” trên thẻ dịch để thêm.", 12, Theme.SubLabel));
-        foreach (var exe in apps)
-        {
-            Add(new Lbl(exe, 14, Theme.Label));
-            var x = new FlatBtn { Glyph = Theme.GCancel, IconPx = 14, Cursor = Cursors.Hand, Fore = Theme.C("#9fb0d9") };
-            var name = exe;
-            x.Click += (_, _) => _unblock(name);
-            Add(x);
-        }
-    }
+        Glyph = Theme.GCancel, IconPx = 13, Radius = 6, Fore = Lt.Sub, HoverFore = Lt.Danger, HoverBack = Lt.DangerBack, Cursor = Cursors.Hand,
+    };
 
-    void Add(Control c) { _kids.Add(c); Controls.Add(c); }
+    public BlockedRow(string exe, Action<string> unblock)
+    {
+        IconGlyph = Theme.GBlock;
+        _name = new Lbl(exe, 14, Lt.Text);
+        _name.TextAlign = ContentAlignment.MiddleLeft;
+        _x.Click += (_, _) => unblock(exe);
+        Controls.Add(_name);
+        Controls.Add(_x);
+    }
 
     public int DoLayout(int width, float s)
     {
-        S = s;
-        int y = Px(6);
-        if (_apps.Count == 0)
-        {
-            var l = (Lbl)_kids[0];
-            l.Restyle(12, false, s);
-            int h = l.HeightFor(width) ;
-            l.SetBounds(0, y + Px(8), width, h);
-            y += Px(8) + h + Px(8);
-        }
-        else
-            for (int i = 0; i < _apps.Count; i++)
-            {
-                var l = (Lbl)_kids[2 * i];
-                var x = (FlatBtn)_kids[2 * i + 1];
-                l.Restyle(14, false, s);
-                x.S = s;
-                int rh = Px(36);
-                l.SetBounds(0, y, width - Px(36), rh);
-                l.TextAlign = ContentAlignment.MiddleLeft;
-                x.SetBounds(width - Px(32), y + Px(2), Px(32), Px(32));
-                y += rh;
-            }
-        y += Px(6);
-        Size = new Size(width, y);
-        return y;
+        S = s; _x.S = s;
+        _name.Restyle(14, false, s);
+        int h = Px(52), padL = Px(54), btn = Px(32);
+        _name.SetBounds(padL, 0, Math.Max(10, width - padL - btn - Px(16)), h);
+        _x.SetBounds(width - btn - Px(10), (h - btn) / 2, btn, btn);
+        Size = new Size(width, h);
+        IconCy = h / 2;
+        return h;
     }
 }
 
-/// <summary>Hộp cài đặt: ngôn ngữ, hành vi, phím tắt, app bị chặn và ghi chú đã lưu.</summary>
+/// <summary>Hộp cài đặt kiểu Windows 11 nền sáng: thanh bên (Cài đặt / Chặn app / Ghi chú) và các thẻ cài đặt bên phải.</summary>
 public sealed class SettingsForm : Form
 {
     public event Action? Changed;
@@ -472,15 +492,18 @@ public sealed class SettingsForm : Form
     readonly Settings _s;
     readonly Action<string, string> _speak;
     float _scale;
-    readonly ToolTip _tip = new();
     int Px(float v) => (int)Math.Round(v * _scale);
 
+    static readonly string[] PageTitles = { "Cài đặt", "Chặn app", "Ghi chú" };
+
     readonly PictureBox _logo = new();
-    readonly Lbl _title, _subtitle;
-    readonly TabBar _tabs = new("Cài đặt", "Chặn app", "Ghi chú");
-    readonly FlatBtn _done, _kill;
-    readonly ScrollPage _general = new(), _blockedPage = new(), _vocabList = new();
-    readonly Panel _vocabPage = new() { BackColor = Theme.Bg };
+    readonly Lbl _brand, _pageTitle;
+    readonly SideNav _nav = new(
+        new[] { (Theme.GSettings, "Cài đặt"), (Theme.GBlock, "Chặn app"), (Theme.GNote, "Ghi chú") },
+        (Theme.GPower, "Tắt app"));
+    readonly FlatBtn _done;
+    readonly ScrollPage _general = new(Lt.Bg, true), _blockedPage = new(Lt.Bg, true), _vocabList = new(Lt.Bg, true);
+    readonly Panel _vocabPage = new() { BackColor = Lt.Bg };
     readonly List<Control> _pages = new();
 
     // trang cài đặt
@@ -490,10 +513,15 @@ public sealed class SettingsForm : Form
     Toggle _autoStart = null!;
     HotkeyButton _hotkey = null!;
     // trang chặn app
-    Section? _blockedSection;
+    readonly List<BlockedRow> _blockedRows = new();
+    Lbl? _blockedEmpty;
     // trang ghi chú
-    readonly FieldBox _search = new() { FontPx = 14, Placeholder = "Tìm trong ghi chú…" };
-    readonly Lbl _count = new("", 12, Theme.SubLabel);
+    readonly FieldBox _search = new()
+    {
+        FontPx = 14, Placeholder = "Tìm trong ghi chú…",
+        Fill = Lt.Field, Border = Lt.FieldBorder, FocusBorder = Lt.Accent, Fore = Lt.Text,
+    };
+    readonly Lbl _count = new("", 12, Lt.Sub);
     FlatBtn _export = null!, _clear = null!;
     readonly List<VocabRow> _vocabRows = new();
     readonly System.Windows.Forms.Timer _watch = new() { Interval = 1000 };   // tự làm mới danh sách khi có ghi chú mới
@@ -511,44 +539,40 @@ public sealed class SettingsForm : Form
         AutoScaleMode = AutoScaleMode.None;
         Text = "SngTrans";
         Icon = Theme.LogoIcon(32);
-        BackColor = Theme.Bg;
+        BackColor = Lt.Bg;
         StartPosition = FormStartPosition.Manual;
         // Kích thước tạm theo màn hình chứa con trỏ; kích thước chính xác đặt lại khi cửa sổ có handle (xem OnHandleCreated).
         var wa = Screen.FromPoint(Cursor.Position).WorkingArea;
         ClientSize = ClientFor(wa);
-        MinimumSize = new Size(Px(480), Px(560));
+        MinimumSize = new Size(Px(580), Px(400));
         Location = new Point(wa.Left + (wa.Width - Width) / 2, wa.Top + (wa.Height - Height) / 2);
 
-        _logo.Image = Theme.LogoBitmap(Px(44) * 2);
+        _search.ApplyColors();
+        _logo.Image = Theme.LogoBitmap(Px(32) * 2);
         _logo.SizeMode = PictureBoxSizeMode.Zoom;
         _logo.BackColor = Color.Transparent;
-        _title = new Lbl("SngTrans", 21, Color.White, true, _scale);
-        _subtitle = new Lbl("Bôi đen chữ ở bất kỳ đâu để dịch", 12, Theme.SubLabel, false, _scale);
-        _tabs.S = _scale;
+        _brand = new Lbl("SngTrans", 16, Lt.Text, true, _scale);
+        _pageTitle = new Lbl(PageTitles[0], 22, Lt.Text, true, _scale);
+        _nav.S = _scale;
+        _nav.FooterTip = "Dừng mọi tiến trình của app, giống Kết thúc tác vụ ở Task Manager.\nPhím tắt dùng ở mọi nơi: Ctrl+Alt+Shift+Q";
+        _nav.FooterClicked += () => ForceQuit?.Invoke();
         _done = new FlatBtn
         {
-            Caption = "Xong", Bold = true, FontPx = 14, Radius = 10, Fore = Color.White, HoverFore = Color.White,
-            Back = Theme.Accent, HoverBack = Theme.C("#2f6fe0"), Cursor = Cursors.Hand, S = _scale,
+            Caption = "Xong", Bold = false, FontPx = 14, Radius = 6, Fore = Color.White, HoverFore = Color.White,
+            Back = Lt.Accent, HoverBack = Lt.AccentHover, Cursor = Cursors.Hand, S = _scale,
         };
         _done.Click += (_, _) => Close();
-        _kill = new FlatBtn
-        {
-            Caption = "Tắt app", Bold = false, FontPx = 13, Radius = 10, Fore = Theme.Err, HoverFore = Theme.Err,
-            Back = Theme.Field, HoverBack = Theme.FieldHover, Cursor = Cursors.Hand, S = _scale,
-        };
-        _kill.Click += (_, _) => ForceQuit?.Invoke();
-        _tip.SetToolTip(_kill, "Dừng mọi tiến trình của app, giống Kết thúc tác vụ ở Task Manager.\nPhím tắt dùng ở mọi nơi: Ctrl+Alt+Shift+Q");
         AcceptButton = null;
 
         BuildGeneral(welcome);
-        BuildBlocked();
         BuildVocab();
         _pages.AddRange(new Control[] { _general, _blockedPage, _vocabPage });
-        Controls.AddRange(new Control[] { _logo, _title, _subtitle, _tabs, _general, _blockedPage, _vocabPage, _kill, _done });
+        Controls.AddRange(new Control[] { _logo, _brand, _nav, _pageTitle, _general, _blockedPage, _vocabPage, _done });
         _blockedPage.Visible = _vocabPage.Visible = false;
-        _tabs.Selected += i =>
+        _nav.Selected += i =>
         {
             for (int k = 0; k < _pages.Count; k++) _pages[k].Visible = k == i;
+            _pageTitle.Text = PageTitles[i];
             if (i == 2) RefreshVocab();
             RelayoutAll();
         };
@@ -565,9 +589,15 @@ public sealed class SettingsForm : Form
         Changed?.Invoke();
     }
 
+    Toggle NewToggle() => new()
+    {
+        S = _scale, Size = new Size(Px(40), Px(20)),
+        OnBack = Lt.Accent, OffBack = Lt.Field, OffBorder = Theme.C("#8a8a8a"), OffKnob = Theme.C("#5c5c5c"), OnKnob = Color.White,
+    };
+
     Toggle MakeToggle(string key, Func<SettingsData, bool> get, Action<SettingsData, bool> put)
     {
-        var t = new Toggle { S = _scale, Size = new Size(Px(44), Px(26)) };
+        var t = NewToggle();
         t.SetSilently(get(_s.Data));
         t.CheckedChanged += (_, _) => Set(d => put(d, t.Checked));
         _toggles[key] = t;
@@ -579,7 +609,6 @@ public sealed class SettingsForm : Form
         if (welcome) _genItems.Add(new InfoBox());
 
         _lang = new LangRow();
-        _lang.Native.Cursor = _lang.Foreign.Cursor = Cursors.Hand;
         _lang.Native.Click += (_, _) => PickLang(true);
         _lang.Foreign.Click += (_, _) => PickLang(false);
         _lang.Swap.Click += (_, _) =>
@@ -593,40 +622,46 @@ public sealed class SettingsForm : Form
             Set(d => { d.Native = "vi"; d.Foreign = "en"; });
             RefreshLangs();
         };
-        _genItems.Add(new Section("Ngôn ngữ", _lang));
+        _genItems.Add(_lang);
 
-        _genItems.Add(new Section("Cách dịch",
-            new RowCtl("Tự dịch khi bôi đen", "Hiện thẻ ngay sau khi bôi đen", MakeToggle("auto", d => d.Auto, (d, v) => d.Auto = v)),
-            new RowCtl("Tự đảo chiều", "Tiếng mẹ đẻ ⇄ ngoại ngữ", MakeToggle("smart", d => d.Smart, (d, v) => d.Smart = v)),
-            new RowCtl("Chỉ khi con trỏ là chữ I", "Tránh dịch nhầm khi kéo thả file", MakeToggle("ibeam", d => d.IbeamOnly, (d, v) => d.IbeamOnly = v))));
+        _genItems.Add(new SettingRow(Theme.GCursor, "Tự dịch khi bôi đen", "Hiện thẻ ngay sau khi bôi đen",
+            MakeToggle("auto", d => d.Auto, (d, v) => d.Auto = v)));
+        _genItems.Add(new SettingRow(Theme.GSwap, "Tự đảo chiều", "Tiếng mẹ đẻ ⇄ ngoại ngữ",
+            MakeToggle("smart", d => d.Smart, (d, v) => d.Smart = v)));
+        _genItems.Add(new SettingRow(Theme.GEdit, "Chỉ khi con trỏ là chữ I", "Tránh dịch nhầm khi kéo thả file",
+            MakeToggle("ibeam", d => d.IbeamOnly, (d, v) => d.IbeamOnly = v)));
 
-        _autoStart = new Toggle { S = _scale, Size = new Size(Px(44), Px(26)) };
-        _autoStart.SetSilently(Win32.IsAutostart());
-        _autoStart.CheckedChanged += (_, _) => BootToggled(_autoStart.Checked);
-        _hotkey = new HotkeyButton(_s.Hotkey) { S = _scale, Size = new Size(Px(190), Px(36)) };
+        _hotkey = new HotkeyButton(_s.Hotkey) { S = _scale, Size = new Size(Px(170), Px(30)) };
         _hotkey.Picked += v => Set(d => d.Hotkey = v);
         _hotkey.CaptureChanged += v => CapturingHotkey?.Invoke(v);
-        _genItems.Add(new Section("Hệ thống",
-            new RowCtl("Chạy cùng Windows", "Tự chạy ngầm khi bật máy", _autoStart),
-            new RowCtl("Phím tắt dịch ngay", "Dịch phần đang bôi đen · Backspace = mặc định", _hotkey)));
+        _genItems.Add(new SettingRow(Theme.GKeyboard, "Phím tắt dịch ngay", "Dịch phần đang bôi đen · Backspace: mặc định", _hotkey));
+
+        _autoStart = NewToggle();
+        _autoStart.SetSilently(Win32.IsAutostart());
+        _autoStart.CheckedChanged += (_, _) => BootToggled(_autoStart.Checked);
+        _genItems.Add(new SettingRow(Theme.GPlay, "Chạy cùng Windows", "Tự chạy ngầm khi bật máy", _autoStart));
 
         foreach (var c in _genItems) _general.Controls.Add(c);
     }
 
-    void BuildBlocked()
-    {
-        FillBlocked();
-    }
-
     void FillBlocked()
     {
-        if (_blockedSection != null)
+        foreach (var r in _blockedRows) { _blockedPage.Controls.Remove(r); r.Dispose(); }
+        _blockedRows.Clear();
+        if (_blockedEmpty != null) { _blockedPage.Controls.Remove(_blockedEmpty); _blockedEmpty.Dispose(); _blockedEmpty = null; }
+        var apps = _s.BlockedApps.ToList();
+        if (apps.Count == 0)
         {
-            _blockedPage.Controls.Remove(_blockedSection);
-            _blockedSection.Dispose();
+            _blockedEmpty = new Lbl("Chưa chặn app nào.\nTick “Không dịch app này” trên thẻ dịch để thêm.", 13, Lt.Muted, false, _scale)
+            { TextAlign = ContentAlignment.MiddleCenter };
+            _blockedPage.Controls.Add(_blockedEmpty);
         }
-        _blockedSection = new Section("Danh sách chặn", new BlockedList(_s.BlockedApps.ToList(), Unblock));
-        _blockedPage.Controls.Add(_blockedSection);
+        foreach (var exe in apps)
+        {
+            var row = new BlockedRow(exe, Unblock);
+            _blockedRows.Add(row);
+            _blockedPage.Controls.Add(row);
+        }
     }
 
     void Unblock(string exe)
@@ -639,8 +674,8 @@ public sealed class SettingsForm : Form
     void BuildVocab()
     {
         _search.Inner.TextChanged += (_, _) => RefreshVocab();
-        _export = new FlatBtn { Glyph = "\uE896", IconPx = 13, Caption = "Xuất CSV", FontPx = 12, Radius = 8, Fore = Theme.Link, HoverFore = Color.White, Back = Color.Empty, HoverBack = Theme.FieldHover, Cursor = Cursors.Hand };
-        _clear = new FlatBtn { Glyph = Theme.GDelete, IconPx = 13, Caption = "Xoá hết", FontPx = 12, Radius = 8, Fore = Theme.Err, HoverFore = Color.White, Back = Color.Empty, HoverBack = Theme.C("#5b2330"), Cursor = Cursors.Hand };
+        _export = new FlatBtn { Glyph = "\uE896", IconPx = 13, Caption = "Xuất CSV", FontPx = 12, Radius = 6, Fore = Lt.Accent, HoverFore = Lt.AccentHover, Back = Color.Empty, HoverBack = Lt.FieldHover, Cursor = Cursors.Hand };
+        _clear = new FlatBtn { Glyph = Theme.GDelete, IconPx = 13, Caption = "Xoá hết", FontPx = 12, Radius = 6, Fore = Lt.Danger, HoverFore = Lt.Danger, Back = Color.Empty, HoverBack = Lt.DangerBack, Cursor = Cursors.Hand };
         _export.Click += (_, _) => ExportCsv();
         _clear.Click += (_, _) => ClearAll();
         _vocabPage.Controls.AddRange(new Control[] { _search, _count, _vocabList, _export, _clear });
@@ -649,7 +684,7 @@ public sealed class SettingsForm : Form
     // ---------------------------------------------------------------- hành động
     void PickLang(bool native)
     {
-        _picker ??= new LangPicker();
+        _picker ??= new LangPicker { Light = true };
         _picker.Chosen -= OnLangChosen;
         _picker.Chosen += OnLangChosen;
         _pickNative = native;
@@ -669,6 +704,12 @@ public sealed class SettingsForm : Form
     {
         _lang.Native.SetLang(_s.Native, Langs.Name(_s.Native), _s.Native);
         _lang.Foreign.SetLang(_s.Foreign, Langs.Name(_s.Foreign), _s.Foreign);
+        bool custom = _s.Native != "vi" || _s.Foreign != "en";
+        if (_lang.ShowReset != custom)
+        {
+            _lang.ShowReset = custom;
+            if (IsHandleCreated) RelayoutAll();
+        }
     }
 
     void BootToggled(bool on)
@@ -723,7 +764,7 @@ public sealed class SettingsForm : Form
         if (_vocabEmpty != null) { _vocabList.Controls.Remove(_vocabEmpty); _vocabEmpty.Dispose(); _vocabEmpty = null; }
         if (shown.Count == 0)
         {
-            _vocabEmpty = new Lbl(q.Length > 0 ? "Không tìm thấy ghi chú nào." : "Chưa có ghi chú nào.\nBấm “Ghi nhớ” trên thẻ dịch để lưu.", 13, Theme.Section, false, _scale)
+            _vocabEmpty = new Lbl(q.Length > 0 ? "Không tìm thấy ghi chú nào." : "Chưa có ghi chú nào.\nBấm “Ghi nhớ” trên thẻ dịch để lưu.", 13, Lt.Muted, false, _scale)
             { TextAlign = ContentAlignment.MiddleCenter };
             _vocabList.Controls.Add(_vocabEmpty);
         }
@@ -791,47 +832,61 @@ public sealed class SettingsForm : Form
     void RelayoutAll()
     {
         if (!IsHandleCreated && ClientSize.Width <= 0) return;
-        int W = ClientSize.Width, H = ClientSize.Height, m = Px(22);
-        int top = Px(20), logo = Px(44);
-        _logo.SetBounds(m, top, logo, logo);
-        int tx = m + logo + Px(12);
-        _title.Restyle(21, true, _scale); _subtitle.Restyle(12, false, _scale);
-        _title.SetBounds(tx, top, Math.Max(10, W - tx - m), _title.Font.Height + 2);
-        _subtitle.SetBounds(tx, top + _title.Height, Math.Max(10, W - tx - m), _subtitle.Font.Height + 2);
+        int W = ClientSize.Width, H = ClientSize.Height;
+        int sideW = Px(160), logo = Px(32);
 
-        int ty = top + logo + Px(14);
-        _tabs.SetBounds(m, ty, _tabs.PreferredWidth, Px(40));
+        // thanh bên: logo + tên, menu, "Tắt app" ở đáy
+        _logo.SetBounds(Px(20), Px(20), logo, logo);
+        _brand.Restyle(16, true, _scale);
+        int bh = _brand.Font.Height + 2;
+        _brand.SetBounds(Px(20) + logo + Px(10), Px(20) + (logo - bh) / 2, Math.Max(10, sideW - Px(20) - logo - Px(14)), bh);
+        int navTop = Px(20) + logo + Px(22);
+        _nav.S = _scale;
+        _nav.SetBounds(0, navTop, sideW, Math.Max(100, H - navTop - Px(16)));
 
-        // chân hộp: "Tắt hẳn" bên trái, "Xong" bên phải
-        int bh = Px(42), bw = Px(110);
-        int by = H - Px(18) - bh;
-        _done.SetBounds(W - m - bw, by, bw, bh);
-        int kw = Gfx.TextWidth(_kill.Caption, Theme.Ui(13, false, _scale)) + Px(40);
-        _kill.SetBounds(m, by, kw, bh);
+        // bên phải: tiêu đề trang, vùng nội dung, nút Xong
+        int cx = sideW + Px(8), right = Px(20);
+        _pageTitle.Restyle(22, true, _scale);
+        int th = _pageTitle.Font.Height + 2;
+        _pageTitle.SetBounds(cx, Px(20), Math.Max(10, W - cx - right), th);
 
-        int py = ty + Px(40) + Px(14);
-        var area = new Rectangle(m, py, Math.Max(100, W - 2 * m), Math.Max(100, by - Px(14) - py));
+        int btnH = Px(32), btnW = Px(96);
+        int by = H - Px(16) - btnH;
+        _done.SetBounds(W - right - btnW, by, btnW, btnH);
+
+        int py = Px(20) + th + Px(16);
+        var area = new Rectangle(cx, py, Math.Max(100, W - cx - right), Math.Max(100, by - Px(14) - py));
         foreach (var p in _pages) p.Bounds = area;
 
-        // trang cài đặt
         if (_general.Visible)
             LayoutScroll(_general, cw =>
             {
                 int y = 0;
                 foreach (var c in _genItems)
                 {
-                    int h = c is Section s ? s.DoLayout(cw, _scale) : ((ILayoutRow)c).DoLayout(cw, _scale);
+                    int h = ((ILayoutRow)c).DoLayout(cw, _scale);
                     c.SetBounds(0, y, cw, h);
-                    y += h + Px(16);
+                    y += h + Px(6);
                 }
                 return y;
             });
-        if (_blockedPage.Visible && _blockedSection != null)
+        if (_blockedPage.Visible)
             LayoutScroll(_blockedPage, cw =>
             {
-                int h = _blockedSection.DoLayout(cw, _scale);
-                _blockedSection.SetBounds(0, 0, cw, h);
-                return h;
+                int y = 0;
+                if (_blockedEmpty != null)
+                {
+                    _blockedEmpty.Restyle(13, false, _scale);
+                    _blockedEmpty.SetBounds(0, Px(30), cw, Px(80));
+                    y = Px(120);
+                }
+                foreach (var r in _blockedRows)
+                {
+                    int h = r.DoLayout(cw, _scale);
+                    r.SetBounds(0, y, cw, h);
+                    y += h + Px(8);
+                }
+                return y;
             });
         if (_vocabPage.Visible)
         {
@@ -855,26 +910,27 @@ public sealed class SettingsForm : Form
     }
 
     Size ClientFor(Rectangle workArea) =>
-        new(Px(500), Math.Max(Px(560), Math.Min(Px(720), workArea.Height - Px(120))));
+        new(Math.Min(Px(700), Math.Max(Px(580), workArea.Width - Px(60))),
+            Math.Max(Px(400), Math.Min(Px(440), workArea.Height - Px(100))));
 
     /// <summary>Áp lại mọi kích thước cố định (công tắc, ô phím tắt, logo) theo tỉ lệ hiện tại.</summary>
     void ApplyScale()
     {
-        _tabs.S = _done.S = _kill.S = _scale;
+        _nav.S = _done.S = _scale;
         var old = _logo.Image;
-        _logo.Image = Theme.LogoBitmap(Px(44) * 2);
+        _logo.Image = Theme.LogoBitmap(Px(32) * 2);
         old?.Dispose();
-        var tsz = new Size(Px(44), Px(26));
+        var tsz = new Size(Px(40), Px(20));
         foreach (var t in _toggles.Values) { t.S = _scale; t.Size = tsz; }
         _autoStart.S = _scale; _autoStart.Size = tsz;
-        _hotkey.S = _scale; _hotkey.Size = new Size(Px(190), Px(36));
-        MinimumSize = new Size(Px(480), Px(560));
+        _hotkey.S = _scale; _hotkey.Size = new Size(Px(170), Px(30));
+        MinimumSize = new Size(Px(580), Px(400));
     }
 
     protected override void OnHandleCreated(EventArgs e)
     {
         base.OnHandleCreated(e);
-        Win32.SetDarkTitlebar(Handle);
+        Win32.SetLightTitlebar(Handle);
         // Lấy tỉ lệ từ DPI THẬT của cửa sổ (theo màn hình nó nằm), không đoán theo vị trí con trỏ,
         // rồi đặt lại kích thước và canh giữa. Nhờ vậy bố cục luôn khớp với khung hiển thị.
         _scale = Win32.DpiOfWindow(Handle) / 96f;
@@ -917,7 +973,7 @@ public sealed class SettingsForm : Form
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) { _watch.Dispose(); _picker?.Dispose(); _tip.Dispose(); }
+        if (disposing) { _watch.Dispose(); _picker?.Dispose(); }
         base.Dispose(disposing);
     }
 }
