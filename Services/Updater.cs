@@ -14,7 +14,7 @@ public static class Updater
     public const string DefaultRepo = "seangogroup-ops/SngTrans";
 
     /// <summary>Trang hướng dẫn sử dụng (Vercel). Dùng ở hộp Cài đặt.</summary>
-    public const string GuideUrl = "https://sng-trans.vercel.app/";
+    public const string GuideUrl = "https://seangogroup-ops.github.io/SngTrans/huong-dan.html";
 
     /// <summary>Mở link bằng trình duyệt mặc định (bỏ qua lỗi, không ném).</summary>
     public static void OpenUrl(string url)
