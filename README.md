@@ -8,7 +8,7 @@ Chạy ngầm ở khay hệ thống. Bôi đen chữ ở bất kỳ app nào (Wo
 Viết lại hoàn toàn từ bản Python/PySide6; **giữ nguyên** thư mục dữ liệu `%APPDATA%\SngTrans`
 (cài đặt, ghi chú, phím tắt cũ dùng tiếp được).
 
-**Hướng dẫn sử dụng:** https://sng-trans.vercel.app/ (nguồn trang web nằm ở thư mục `docs/`: `index.html`, `huong-dan.html`).
+**Hướng dẫn sử dụng:** https://seangogroup-ops.github.io/SngTrans/huong-dan.html (nguồn trang web nằm ở thư mục `docs/`: `index.html`, `huong-dan.html`).
 
 ## Tạo app (.exe)
 Cần **.NET 10 SDK** (https://dotnet.microsoft.com/download/dotnet/10.0). Bấm đúp `build.bat`, ra hai bản:
@@ -28,8 +28,6 @@ Chạy thử từ mã nguồn: bấm đúp `run.bat` (cửa sổ đen in nhật 
 - Bôi đen (kéo chuột hoặc nhấp đúp/ba) -> thẻ dịch hiện ngay trên con trỏ.
 - Phím tắt `Alt+1` dịch phần đang bôi đen ngay (đổi được trong Cài đặt; Backspace = về mặc định).
 - Phím tắt `Alt+2` bật/tắt **Tự dịch khi bôi đen** ở bất kỳ app nào (hiện thông báo nhỏ; đổi được ở Cài đặt > Phím bật/tắt tự dịch; Backspace = về mặc định).
-- Cập nhật lên bản này: phím tắt khách đã lưu từ trước (Alt+F1/F2, hay phím tự đổi) bị xoá một lần, về mặc định `Alt+1` / `Alt+2`. Sau đó khách đổi phím ở Cài đặt thì được giữ nguyên.
-- Lần đầu tải về và mỗi khi cập nhật lên phiên bản mới, app hiện một màn hướng dẫn một trang (hai phím tắt đang dùng) với nút **Next**; mỗi phiên bản chỉ hiện đúng một lần.
 - `Esc` hoặc bấm ra ngoài để đóng; nút ghim để giữ thẻ; kéo vùng trống của thẻ để di chuyển.
 - Biểu tượng khay: **Tự dịch** (bật/tắt), **Ghi chú**, **Cài đặt**, **Cập nhật**, **Thoát**.
 - **Ghi chú** trên thẻ lưu câu/từ kèm bản dịch (tab Ghi chú, xuất CSV được).
