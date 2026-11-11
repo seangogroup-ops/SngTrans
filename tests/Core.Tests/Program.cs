@@ -94,6 +94,44 @@ Eq(Translator.GuessNative("Xin chào", "en"), (bool?)null, "native không phải
     Eq(string.Concat(Translator.Split(noDot)), noDot, "câu không dấu chấm vẫn đủ chữ");
 }
 
+// ---------- Translator.Split theo hệ chữ (văn bản lẫn nhiều ngôn ngữ)
+{
+    static bool Han(char c) => c >= 0x4E00 && c <= 0x9FFF;
+    static bool Hangul(char c) => c >= 0xAC00 && c <= 0xD7AF;
+    static bool Latin(char c) => char.IsLetter(c) && c < 0x250;
+    static int Kinds(string s) => (s.Any(Han) ? 1 : 0) + (s.Any(Hangul) ? 1 : 0) + (s.Any(Latin) ? 1 : 0);
+
+    var mixed = "1. When the sun goes down, the city changes.\n2. 当太阳落山时，城市变了。灯光照亮了街道。\n3. 해가 지면 도시가 변합니다.\n4. Khi mặt trời lặn, thành phố khác hẳn.";
+    var parts = Translator.Split(mixed);
+    Eq(string.Concat(parts), mixed, "lẫn nhiều chữ: ghép lại đúng nguyên văn");
+    Check(parts.All(p => Kinds(p) <= 1), "mỗi khúc chỉ một hệ chữ: " + string.Join(" | ", parts));
+    Check(parts.Count >= 4, "Anh, Trung, Hàn, Việt tách riêng");
+    Check(parts.Any(p => p.StartsWith("\n2.") || p.StartsWith("2.")), "số thứ tự đi theo câu của nó");
+
+    var oneLine = "Hello world. 你好，世界。 안녕하세요.";
+    Check(Translator.Split(oneLine).All(p => Kinds(p) <= 1), "một dòng lẫn chữ vẫn tách");
+
+    var cjkLong = string.Concat(Enumerable.Repeat("这是很长的一句话没有句号", 80));
+    var cp = Translator.Split(cjkLong);
+    Check(cp.All(p => p.Length <= 450), "Trung dài không dấu chấm: khúc <= 450");
+    Eq(string.Concat(cp), cjkLong, "Trung dài: đủ chữ");
+}
+
+// ---------- Translator.Prepare (nối dòng bị ngắt khi copy từ PDF)
+{
+    Eq(Translator.Prepare("작은 식당들은 맛있는 음식을 즐기며\n즐겁게 대화하는 사람들로 가득합니다."),
+        "작은 식당들은 맛있는 음식을 즐기며 즐겁게 대화하는 사람들로 가득합니다.", "Hàn: nối dòng bằng dấu cách");
+    Eq(Translator.Prepare("수많은 불빛이 거리를 밝히고,자동차와 오토바이가"),
+        "수많은 불빛이 거리를 밝히고, 자동차와 오토바이가", "Hàn: thiếu dấu cách sau dấu phẩy");
+    Eq(Translator.Prepare("今天天气\n很好。"), "今天天气很好。", "Trung: nối dòng không dấu cách");
+    Eq(Translator.Prepare("This is a long sen-\ntence that wraps\r\nacross lines."),
+        "This is a long sentence that wraps across lines.", "Anh: nối gạch cuối dòng và dòng ngắt");
+    Eq(Translator.Prepare("Đoạn một dòng một\ndòng hai\n\nĐoạn hai"), "Đoạn một dòng một dòng hai\n\nĐoạn hai", "giữ ranh giới đoạn");
+    Eq(Translator.Prepare("Mua:\n- táo\n- cam"), "Mua:\n- táo\n- cam", "giữ danh sách");
+    Eq(Translator.Prepare("pi = 3.14,abc"), "pi = 3.14,abc", "không sửa dấu câu ngoài chữ Hàn");
+    Eq(Translator.Prepare("  \n "), "", "toàn khoảng trắng");
+}
+
 // ---------- Translator.TranslateAsync với mạng giả
 {
     var calls = new List<string>();
@@ -127,6 +165,21 @@ Eq(Translator.GuessNative("Xin chào", "en"), (bool?)null, "native không phải
     var r5 = await Translator.TranslateAsync("xin", "en", "fr", false, ("auto", "ja"));
     Eq(r5.Tl, "ja", "dịch tay"); Check(calls[0].Contains("tl=ja"), "dịch tay gọi đúng đích");
 
+    // văn bản lẫn Anh/Trung/Hàn: mỗi ngôn ngữ một lần gọi riêng, không khúc nào lẫn hai hệ chữ
+    Translator.ClearCache();
+    calls.Clear();
+    var multi = "1. When the sun goes down, the city changes.\n2. 当太阳落山时，城市变了。\n3. 해가 지면 도시가 변합니다.";
+    var rm = await Translator.TranslateAsync(multi, "vi", "en", true);
+    Eq(calls.Count, 3, "Anh/Trung/Hàn: 3 lần gọi");
+    Check(calls.All(u =>
+    {
+        var q = Uri.UnescapeDataString(u[(u.IndexOf("&q=") + 3)..]);
+        int k = (q.Any(ch => ch >= 0x4E00 && ch <= 0x9FFF) ? 1 : 0) + (q.Any(ch => ch >= 0xAC00 && ch <= 0xD7AF) ? 1 : 0)
+              + (q.Any(ch => char.IsLetter(ch) && ch < 0x250) ? 1 : 0);
+        return k <= 1;
+    }), "không lần gọi nào lẫn hai hệ chữ");
+    Check(rm.Translation.Contains('\n'), "giữ xuống dòng giữa các mục");
+
     // bị giới hạn tần suất ở mọi endpoint rồi tới dự phòng
     Translator.ClearCache();
     Translator.Fetcher = (url, ct) => throw new RateLimitedException(0);
@@ -153,10 +206,13 @@ Eq(Translator.GuessNative("Xin chào", "en"), (bool?)null, "native không phải
         """[{"text":"hello","translation":"xin chào","source":"en","ts":1700000000000}]""");
     var s = new Settings(dir);
     Eq(s.Native, "ja", "native"); Eq(s.Smart, false, "smart"); Eq(s.IbeamOnly, false, "ver<2 tắt ibeam_only");
-    Eq(s.Hotkey, "<ctrl>+<alt>+y", "hotkey"); Eq(s.FirstRun, false, "first_run");
+    Eq(s.Hotkey, SettingsData.DefaultHotkey, "ver<3: bỏ phím tắt khách đã lưu, về mặc định");
+    Eq(s.Data.ToggleHotkey, SettingsData.DefaultToggleHotkey, "ver<3: phím bật/tắt về mặc định");
+    Eq(s.FirstRun, false, "first_run");
     Eq(s.BlockedApps.Count, 1, "blocked_apps");
-    s.Update(d => { d.Auto = false; d.BlockedApps.Add("winword.exe"); });
+    s.Update(d => { d.Auto = false; d.BlockedApps.Add("winword.exe"); d.Hotkey = "<ctrl>+<alt>+y"; });
     var s2 = new Settings(dir);
+    Eq(s2.Hotkey, "<ctrl>+<alt>+y", "ver 3: phím khách đổi sau đó được giữ nguyên");
     Eq(s2.Auto, false, "lưu và đọc lại"); Eq(s2.BlockedApps.Count, 2, "blocked_apps lưu lại");
     var json = File.ReadAllText(Path.Combine(dir, "settings.json"));
     Check(json.Contains("\"ibeam_only\"") && json.Contains("\"first_run\"") && json.Contains("\"blocked_apps\""), "khoá JSON giữ tên cũ");
@@ -183,6 +239,24 @@ Eq(Translator.GuessNative("Xin chào", "en"), (bool?)null, "native không phải
     Eq(Tts.NormalizeLang("", "hello"), "en", "rỗng -> en");
     Eq(Tts.NormalizeLang("zh-cn", "你好"), "zh-CN", "zh-cn -> zh-CN");
     Eq(Tts.NormalizeLang("en-US", "hi"), "en", "en-US -> en");
+}
+
+// ---------- Updater: kiểm tra SHA256
+{
+    const string abc = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";   // SHA256("abc")
+    Eq(Updater.ParseSha256(abc + "  SngTrans.exe\n"), abc, "sha256: mã + tên file");
+    Eq(Updater.ParseSha256(abc + " *SngTrans.exe"), abc, "sha256: dạng nhị phân (*)");
+    Eq(Updater.ParseSha256("\uFEFF" + abc.ToUpperInvariant() + "\r\n"), abc, "sha256: BOM, chữ hoa, CRLF -> chữ thường");
+    Eq(Updater.ParseSha256(abc), abc, "sha256: chỉ có mã");
+    Check(Updater.ParseSha256("") == null && Updater.ParseSha256(null) == null, "sha256: rỗng -> null");
+    Check(Updater.ParseSha256("abc123") == null, "sha256: quá ngắn -> null");
+    Check(Updater.ParseSha256(new string('z', 64)) == null, "sha256: không phải hex -> null");
+    var f = Path.Combine(Path.GetTempPath(), "sngtrans-sha-" + Guid.NewGuid().ToString("N") + ".bin");
+    File.WriteAllBytes(f, new byte[] { 0x61, 0x62, 0x63 });
+    Eq(Updater.Sha256Of(f), abc, "Sha256Of(\"abc\")");
+    File.WriteAllBytes(f, new byte[] { 0x61, 0x62, 0x64 });
+    Check(Updater.Sha256Of(f) != abc, "đổi 1 byte thì mã khác");
+    File.Delete(f);
 }
 
 Console.WriteLine(fails == 0 ? $"TẤT CẢ ĐẠT ({total} kiểm tra)" : $"CÓ {fails}/{total} KIỂM TRA THẤT BẠI");

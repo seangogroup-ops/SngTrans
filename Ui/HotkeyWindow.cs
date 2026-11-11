@@ -3,9 +3,11 @@ namespace SngTrans.Ui;
 /// <summary>Cửa sổ ẩn (message-only) nhận phím tắt toàn cục qua RegisterHotKey.</summary>
 public sealed class HotkeyWindow : NativeWindow, IDisposable
 {
-    public const int IdTranslate = 1, IdForceQuit = 2;
+    public const int IdTranslate = 1, IdForceQuit = 2, IdToggle = 3;
     public event Action<int>? Pressed;
     readonly HashSet<int> _registered = new();
+    readonly Dictionary<int, long> _last = new();                 // lần bấm gần nhất của từng phím (để chặn bấm dồn)
+    const int MinGapMs = 300;
 
     public HotkeyWindow()
     {
@@ -34,7 +36,17 @@ public sealed class HotkeyWindow : NativeWindow, IDisposable
 
     protected override void WndProc(ref Message m)
     {
-        if (m.Msg == Win32.WM_HOTKEY) Pressed?.Invoke((int)m.WParam);
+        if (m.Msg == Win32.WM_HOTKEY)
+        {
+            int id = (int)m.WParam;
+            long now = Environment.TickCount64;
+            // Chỉ phím dịch bị chặn bấm dồn (300 ms). Phím bật/tắt và thoát khẩn cấp phải ăn từng lần bấm, nhạy như Unikey.
+            if (id != IdTranslate || !_last.TryGetValue(id, out var t) || now - t >= MinGapMs)
+            {
+                _last[id] = now;
+                Pressed?.Invoke(id);
+            }
+        }
         base.WndProc(ref m);
     }
 

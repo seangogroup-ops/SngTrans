@@ -1,4 +1,5 @@
 using System.Drawing.Drawing2D;
+using Lt = SngTrans.Ui.Theme.Light;
 
 namespace SngTrans.Ui;
 
@@ -17,8 +18,9 @@ sealed class TrayMenuList : Ctl
     int _hover = -1;
     public event Action<TrayMenuItem>? Picked;
 
-    public TrayMenuList() { BackColor = Theme.PickerBg; }
+    public TrayMenuList() { BackColor = Lt.Card; }
 
+    const float FontPx = 12.5f;
     int RowH(TrayMenuItem it) => it.Separator ? Px(7) : Px(28);
     public int ContentH => Items.Sum(it => RowH(it));
 
@@ -56,7 +58,7 @@ sealed class TrayMenuList : Ctl
     protected override void OnPaint(PaintEventArgs e)
     {
         var g = e.Graphics;
-        g.Clear(Theme.PickerBg);
+        g.Clear(Lt.Card);
         g.SmoothingMode = SmoothingMode.AntiAlias;
         int y = 0;
         for (int i = 0; i < Items.Count; i++)
@@ -65,18 +67,18 @@ sealed class TrayMenuList : Ctl
             int h = RowH(it);
             if (it.Separator)
             {
-                using var b = new SolidBrush(Color.FromArgb(22, 255, 255, 255));
+                using var b = new SolidBrush(Lt.Border);
                 g.FillRectangle(b, Px(8), y + h / 2, Width - Px(16), 1);
             }
             else
             {
                 if (i == _hover)
-                    Gfx.FillRound(g, Theme.C("#1b2548"), new RectangleF(0, y + 1, Width, h - 2), Px(7));
+                    Gfx.FillRound(g, Lt.NavHover, new RectangleF(0, y + 1, Width, h - 2), Px(8));
                 if (it.Checked)
-                    Gfx.Text(g, Theme.GCheck, Theme.Icon(12, S), new Rectangle(Px(6), y, Px(20), h), Theme.Link,
+                    Gfx.Text(g, Theme.GCheck, Theme.Icon(11, S), new Rectangle(Px(6), y, Px(18), h), Lt.Accent,
                         Gfx.Single | TextFormatFlags.HorizontalCenter);
-                Gfx.Text(g, it.Text, Theme.Ui(13, false, S), new Rectangle(Px(32), y, Math.Max(1, Width - Px(40)), h),
-                    it.Danger ? Theme.Err : Theme.C("#f1f4ff"), Gfx.Single | TextFormatFlags.EndEllipsis);
+                Gfx.Text(g, it.Text, Theme.Ui(FontPx, false, S), new Rectangle(Px(28), y, Math.Max(1, Width - Px(36)), h),
+                    it.Danger ? Lt.Danger : Lt.Text, Gfx.Single | TextFormatFlags.EndEllipsis);
             }
             y += h;
         }
@@ -85,7 +87,7 @@ sealed class TrayMenuList : Ctl
 
 /// <summary>
 /// Menu khay hệ thống tự vẽ (thay ContextMenuStrip). Tự đo kích thước theo DPI thật của cửa sổ
-/// nên luôn hiện đủ mọi mục, và có màu tối cùng kiểu với phần còn lại của app.
+/// nên luôn hiện đủ mọi mục, và có nền trắng cùng kiểu với phần còn lại của app.
 /// </summary>
 public sealed class TrayMenu : Form
 {
@@ -103,7 +105,7 @@ public sealed class TrayMenu : Form
         ShowInTaskbar = false;
         StartPosition = FormStartPosition.Manual;
         TopMost = true;
-        BackColor = Theme.PickerBg;
+        BackColor = Lt.Card;
         AutoScaleMode = AutoScaleMode.None;
         KeyPreview = true;
         _list.Items = items;
@@ -149,7 +151,7 @@ public sealed class TrayMenu : Form
     {
         base.OnHandleCreated(e);
         _s = Win32.DpiOfWindow(Handle) / 96f;
-        Win32.SetRoundedBorder(Handle, 0x4A3A22);
+        Win32.SetRoundedBorder(Handle, 0xE3E3E3);     // viền #e3e3e3 (BGR)
         Fit();
     }
 
@@ -157,12 +159,12 @@ public sealed class TrayMenu : Form
     {
         int P(float v) => (int)Math.Round(v * _s);
         _list.S = _s;
-        var tf = Theme.Ui(13, false, _s);
+        var tf = Theme.Ui(12.5f, false, _s);
         int textW = 0;
         foreach (var it in _list.Items)
             if (!it.Separator) textW = Math.Max(textW, Gfx.TextWidth(it.Text, tf));
         int pad = P(4);
-        int w = Math.Max(P(190), textW + P(32 + 12) + 2 * pad);
+        int w = Math.Max(P(150), textW + P(28 + 10) + 2 * pad);
         int h = _list.ContentH + 2 * pad;
         ClientSize = new Size(w, h);
         _list.SetBounds(pad, pad, w - 2 * pad, h - 2 * pad);
@@ -204,7 +206,7 @@ public sealed class TrayMenu : Form
         if (Win32.IsWin11) return;
         var g = e.Graphics;
         g.SmoothingMode = SmoothingMode.AntiAlias;
-        Gfx.DrawRound(g, Color.FromArgb(70, 255, 255, 255), new RectangleF(0.5f, 0.5f, Width - 1, Height - 1),
+        Gfx.DrawRound(g, Lt.Border, new RectangleF(0.5f, 0.5f, Width - 1, Height - 1),
             Math.Max(2, (int)(12 * _s)));
     }
 }

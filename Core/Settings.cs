@@ -14,11 +14,15 @@ public sealed class SettingsData
     [JsonPropertyName("auto")] public bool Auto { get; set; } = true;
     [JsonPropertyName("ibeam_only")] public bool IbeamOnly { get; set; } = false;
     [JsonPropertyName("hotkey")] public string Hotkey { get; set; } = DefaultHotkey;
-    [JsonPropertyName("ver")] public int Ver { get; set; } = 2;
+    [JsonPropertyName("toggle_hotkey")] public string ToggleHotkey { get; set; } = DefaultToggleHotkey;
+    [JsonPropertyName("ver")] public int Ver { get; set; } = 3;
     [JsonPropertyName("first_run")] public bool FirstRun { get; set; } = true;
     [JsonPropertyName("blocked_apps")] public List<string> BlockedApps { get; set; } = new();
+    /// <summary>Phiên bản đã hiện màn hướng dẫn. Khác phiên bản hiện tại thì hiện lại đúng một lần.</summary>
+    [JsonPropertyName("seen_guide")] public string SeenGuide { get; set; } = "";
 
-    public const string DefaultHotkey = "<ctrl>+<alt>+t";
+    public const string DefaultHotkey = "<alt>+1";
+    public const string DefaultToggleHotkey = "<alt>+2";
 }
 
 public sealed class VocabItem
@@ -75,6 +79,7 @@ public sealed class Settings
     public bool Auto => Data.Auto;
     public bool IbeamOnly => Data.IbeamOnly;
     public string Hotkey => Data.Hotkey;
+    public string ToggleHotkey => Data.ToggleHotkey;
     public bool FirstRun => Data.FirstRun;
     public IReadOnlyList<string> BlockedApps { get { lock (_lock) return Data.BlockedApps.ToList(); } }
 
@@ -86,12 +91,21 @@ public sealed class Settings
             if (loaded != null)
             {
                 if (loaded.Ver < 2) loaded.IbeamOnly = false;     // bản cũ bật ibeam_only làm nhiều app không dịch được
-                loaded.Ver = 2;
+                bool migrate = loaded.Ver < 3;
+                if (migrate)                                      // bản cũ: bỏ mọi phím tắt khách đã lưu (Alt+F1/F2, Alt+1/2 cũ hay phím tự đổi), về mặc định
+                {
+                    loaded.Hotkey = SettingsData.DefaultHotkey;
+                    loaded.ToggleHotkey = SettingsData.DefaultToggleHotkey;
+                }
+                loaded.Ver = 3;
                 if (string.IsNullOrWhiteSpace(loaded.Native)) loaded.Native = "vi";
                 if (string.IsNullOrWhiteSpace(loaded.Foreign)) loaded.Foreign = "en";
+                loaded.SeenGuide ??= "";
                 if (string.IsNullOrWhiteSpace(loaded.Hotkey)) loaded.Hotkey = SettingsData.DefaultHotkey;
+                if (string.IsNullOrWhiteSpace(loaded.ToggleHotkey)) loaded.ToggleHotkey = SettingsData.DefaultToggleHotkey;
                 loaded.BlockedApps ??= new List<string>();
                 Data = loaded;
+                if (migrate) Save();                              // ghi ngay để lần sau không phải đổi lại
             }
         }
         catch { /* chưa có file hoặc file hỏng: dùng mặc định */ }
@@ -113,11 +127,50 @@ public sealed class Settings
         lock (_lock)
         {
             mutate(Data);
+            _dirty = false;                  // Save() ghi toàn bộ nên mọi thay đổi chờ ghi trễ cũng đã được ghi
+            Save();
+        }
+    }
+
+    bool _dirty;
+    System.Threading.Timer? _saveTimer;
+
+    /// <summary>Đổi giá trị ngay trong bộ nhớ (có hiệu lực tức thì), còn ghi file thì dồn lại sau ~0,4 giây.
+    /// Dùng cho thao tác bấm dồn như bật/tắt tự dịch: bấm 10 lần chỉ ghi đĩa 1 lần.</summary>
+    public void UpdateDeferred(Action<SettingsData> mutate, int delayMs = 400)
+    {
+        lock (_lock)
+        {
+            mutate(Data);
+            _dirty = true;
+            if (_saveTimer == null) _saveTimer = new System.Threading.Timer(_ => Flush());
+            _saveTimer.Change(delayMs, Timeout.Infinite);
+        }
+    }
+
+    /// <summary>Ghi ngay các thay đổi còn chờ (gọi trước khi thoát app).</summary>
+    public void Flush()
+    {
+        lock (_lock)
+        {
+            if (!_dirty) return;
+            _dirty = false;
             Save();
         }
     }
 
     // ----- ghi chú (vocab.json, tương thích bản cũ) -----
+    /// <summary>Dấu hiệu file ghi chú đã đổi (giờ ghi + dung lượng): so sánh rẻ, khỏi đọc và phân tích JSON mỗi lần.</summary>
+    public (long Ticks, long Length) VocabStamp()
+    {
+        try
+        {
+            var fi = new FileInfo(_vocabPath);
+            return fi.Exists ? (fi.LastWriteTimeUtc.Ticks, fi.Length) : (0, 0);
+        }
+        catch { return (0, 0); }
+    }
+
     public List<VocabItem> Vocab()
     {
         try

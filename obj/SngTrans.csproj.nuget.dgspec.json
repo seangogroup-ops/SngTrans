@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\LENOVO\\Desktop\\app\\SngTrans-main\\SngTrans.csproj": {}
+    "C:\\Users\\LENOVO\\Desktop\\app2 - Copy\\SngTrans-main\\SngTrans.csproj": {}
   },
   "projects": {
-    "C:\\Users\\LENOVO\\Desktop\\app\\SngTrans-main\\SngTrans.csproj": {
+    "C:\\Users\\LENOVO\\Desktop\\app2 - Copy\\SngTrans-main\\SngTrans.csproj": {
       "version": "2.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\LENOVO\\Desktop\\app\\SngTrans-main\\SngTrans.csproj",
+        "projectUniqueName": "C:\\Users\\LENOVO\\Desktop\\app2 - Copy\\SngTrans-main\\SngTrans.csproj",
         "projectName": "SngTrans",
-        "projectPath": "C:\\Users\\LENOVO\\Desktop\\app\\SngTrans-main\\SngTrans.csproj",
+        "projectPath": "C:\\Users\\LENOVO\\Desktop\\app2 - Copy\\SngTrans-main\\SngTrans.csproj",
         "packagesPath": "C:\\Users\\LENOVO\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\LENOVO\\Desktop\\app\\SngTrans-main\\obj\\",
+        "outputPath": "C:\\Users\\LENOVO\\Desktop\\app2 - Copy\\SngTrans-main\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "C:\\Users\\LENOVO\\AppData\\Roaming\\NuGet\\NuGet.Config"

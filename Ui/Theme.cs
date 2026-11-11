@@ -9,20 +9,31 @@ public static class Theme
     public static Color C(string hex) => ColorTranslator.FromHtml(hex);
 
     // thẻ dịch
-    public static readonly Color CardBg = C("#121a30");
-    public static readonly Color CardBorder = C("#252d47");
+    // (thẻ dịch và menu khay dùng chung bảng màu tối xanh navy này; chỉnh sáng/tối ở CardBg)
+    public static readonly Color CardBg = C("#151c33");
+    public static readonly Color CardBorder = C("#2a3454");
     public static readonly Color Txt = C("#f4f6fb");
+    public static readonly Color CardBody = C("#d5dcf5");
+    public static readonly Color CardMuted = C("#9aa6c4");
+    public static readonly Color CardDim = C("#7b87a8");
+    public static readonly Color CardHover = C("#212b4d");
+    public static readonly Color CardErr = C("#fca5a5");
+    public static readonly Color SrcBg = C("#202a4a");
+    public static readonly Color SrcHover = C("#2a3660");
+    public static readonly Color SrcFore = C("#e8ecf8");
+    public static readonly Color Primary = C("#2563eb");
+    public static readonly Color PrimaryHover = C("#1d4ed8");
+    public static readonly Color Skel1 = C("#202a4a");
+    public static readonly Color Skel2 = C("#2f3c6a");
+
     public static readonly Color Muted = C("#8f9bb8");
     public static readonly Color Dim = C("#6b7799");
     public static readonly Color PillBg = C("#1a2342");
     public static readonly Color PillHover = C("#232f57");
     public static readonly Color BtnHover = C("#1d2748");
-    public static readonly Color Skel1 = C("#1a2342");
-    public static readonly Color Skel2 = C("#2c3a69");
     public static readonly Color PickerBg = C("#101831");
     public static readonly Color Accent = C("#3b82f6");
     public static readonly Color Link = C("#93c5fd");
-    public static readonly Color Err = C("#fca5a5");
 
     // hộp cài đặt
     public static readonly Color Bg = C("#0b1222");
@@ -62,16 +73,20 @@ public static class Theme
     static string? _ui, _icon;
     static readonly Dictionary<(int, bool, string), Font> Cache = new();
 
-    static bool Has(InstalledFontCollection fc, string name) =>
-        fc.Families.Any(f => string.Equals(f.Name, name, StringComparison.OrdinalIgnoreCase));
+    /// <summary>Kiểm tra phông có cài không bằng cách mở thẳng theo tên (nhanh hơn nhiều so với liệt kê
+    /// toàn bộ phông trên máy bằng InstalledFontCollection, vốn chậm lúc vừa đăng nhập).</summary>
+    static bool Has(string name)
+    {
+        try { using var f = new FontFamily(name); return true; }
+        catch (ArgumentException) { return false; }
+    }
 
     public static string UiFamily
     {
         get
         {
             if (_ui != null) return _ui;
-            using var fc = new InstalledFontCollection();
-            _ui = UiFamilies.FirstOrDefault(n => Has(fc, n)) ?? "Segoe UI";
+            _ui = UiFamilies.FirstOrDefault(Has) ?? "Segoe UI";
             return _ui;
         }
     }
@@ -82,8 +97,7 @@ public static class Theme
         get
         {
             if (_icon != null) return _icon;
-            using var fc = new InstalledFontCollection();
-            _icon = Has(fc, "Segoe Fluent Icons") ? "Segoe Fluent Icons" : "Segoe MDL2 Assets";
+            _icon = Has("Segoe Fluent Icons") ? "Segoe Fluent Icons" : "Segoe MDL2 Assets";
             return _icon;
         }
     }
@@ -109,7 +123,7 @@ public static class Theme
     public const string GCancel = "\uE711", GPin = "\uE718", GVolume = "\uE767", GCopy = "\uE8C8",
         GCheck = "\uE73E", GChevron = "\uE70D", GForward = "\uE72A", GDelete = "\uE74D",
         GSettings = "\uE713", GBlock = "\uE733", GNote = "\uE736", GPower = "\uE7E8", GGlobe = "\uE774",
-        GCursor = "\uE8B3", GSwap = "\uE8AB", GKeyboard = "\uE765", GPlay = "\uE768", GEdit = "\uE70F", GInfo = "\uE946";
+        GCursor = "\uE8B3", GSwap = "\uE8AB", GKeyboard = "\uE765", GPlay = "\uE768", GEdit = "\uE70F", GInfo = "\uE946", GHelp = "\uE9CE";
 
     /// <summary>Biểu tượng ứng dụng: ô vuông bo góc xanh với chữ A trắng.</summary>
     public static Bitmap LogoBitmap(int size)

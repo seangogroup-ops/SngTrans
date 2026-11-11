@@ -29,7 +29,7 @@ echo.
 echo === [2/2] Ban DAY DU: tu chua .NET, chep di dau cung chay, khong can cai gi ===
 dotnet publish SngTrans.csproj -c Release -r win-x64 --self-contained true ^
   -p:PublishSingleFile=true -p:PublishReadyToRun=true ^
-  -p:EnableCompressionInSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true ^
+  -p:IncludeNativeLibrariesForSelfExtract=true ^
   -o dist\SngTrans-day-du || goto :err
 
 echo.

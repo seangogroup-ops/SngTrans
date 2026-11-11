@@ -90,6 +90,7 @@ public sealed class Pill : Ctl
     public string Code = "auto", LangName = "";
     public string? FlagCode;
     public float FontPx = 14;
+    public bool Bold;
     public bool AutoWidth = true;
     public Color Bg = Theme.PillBg, BgHover = Theme.PillHover;
     /// <summary>Kiểu gọn (nền sáng): không cờ, chữ canh trái, có viền và mũi tên.</summary>
@@ -106,7 +107,7 @@ public sealed class Pill : Ctl
     public void Remeasure()
     {
         if (AutoWidth)
-            Width = Gfx.TextWidth(LangName, Theme.Ui(FontPx, false, S)) + Px(9 + 22 + 8 + 8 + 12 + 9 + 4);
+            Width = Gfx.TextWidth(LangName, Theme.Ui(FontPx, Bold, S)) + Px(9 + 22 + 8 + 8 + 12 + 9 + 4);
     }
 
     protected override void OnPaint(PaintEventArgs e)
@@ -125,7 +126,7 @@ public sealed class Pill : Ctl
             g.DrawImageUnscaled(Flags.Get(FlagCode, fw, fh), Px(9), (Height - fh) / 2);
             tx = Px(9 + 22 + 8);
         }
-        Gfx.Text(g, LangName, Theme.Ui(FontPx, false, S), new Rectangle(tx, 0, Math.Max(1, Width - tx - Px(28)), Height),
+        Gfx.Text(g, LangName, Theme.Ui(FontPx, Bold, S), new Rectangle(tx, 0, Math.Max(1, Width - tx - Px(28)), Height),
             Fore, Gfx.Single | TextFormatFlags.EndEllipsis);
         var ic = Theme.Icon(11, S);
         Gfx.Text(g, Theme.GChevron, ic, new Rectangle(Width - Px(9 + 14), 0, Px(14), Height), Chevron,
@@ -172,7 +173,8 @@ public sealed class Check : Ctl
     bool _on;
     string _text = "";
     public event EventHandler? CheckedChanged;
-    public float FontPx = 12;
+    public float FontPx = 12, BoxPx = 16;
+    public Color BoxBorder = Theme.C("#3a4668"), BoxHover = Theme.C("#6a7bb0"), BoxFill = Color.Empty, Fore = Theme.Dim;
 
     public Check() { Cursor = Cursors.Hand; }
 
@@ -184,7 +186,7 @@ public sealed class Check : Ctl
     }
     public void SetSilently(bool v) { _on = v; Invalidate(); }
 
-    public int PreferredWidth => Px(16 + 8) + Gfx.TextWidth(_text, Theme.Ui(FontPx, false, S)) + Px(2);
+    public int PreferredWidth => Px(BoxPx + 8) + Gfx.TextWidth(_text, Theme.Ui(FontPx, false, S)) + Px(2);
 
     protected override void OnClick(EventArgs e) { Checked = !Checked; base.OnClick(e); }
 
@@ -192,15 +194,16 @@ public sealed class Check : Ctl
     {
         var g = e.Graphics;
         g.SmoothingMode = SmoothingMode.AntiAlias;
-        int box = Px(16);
+        int box = Px(BoxPx);
         var r = new RectangleF(0.5f, (Height - box) / 2f + 0.5f, box - 1, box - 1);
         if (_on) Gfx.FillRound(g, Theme.Accent, r, Px(5));
-        Gfx.DrawRound(g, _on ? Theme.Accent : (Hover ? Theme.C("#6a7bb0") : Theme.C("#3a4668")), r, Px(5));
+        else Gfx.FillRound(g, BoxFill, r, Px(5));
+        Gfx.DrawRound(g, _on ? Theme.Accent : (Hover ? BoxHover : BoxBorder), r, Px(5), _on ? 1f : 1.5f);
         if (_on)
             Gfx.Text(g, Theme.GCheck, Theme.Icon(10, S), Rectangle.Round(r), Color.White,
                 Gfx.Single | TextFormatFlags.HorizontalCenter);
         Gfx.Text(g, _text, Theme.Ui(FontPx, false, S), new Rectangle(box + Px(8), 0, Math.Max(1, Width - box - Px(8)), Height),
-            Theme.Dim, Gfx.Single | TextFormatFlags.EndEllipsis);
+            Fore, Gfx.Single | TextFormatFlags.EndEllipsis);
     }
 }
 
@@ -258,8 +261,9 @@ public sealed class Block
     public string Lead = "";          // phần dẫn đầu (từ loại, dấu •), vẽ thụt vào bên trái
     public float Px = 14;
     public bool Bold, Italic;
-    public Color Color = Theme.Txt, LeadColor = Theme.Dim;
-    public float Before, After;       // khoảng cách trên/dưới (đơn vị 96 dpi)
+    public Color Color = Theme.Txt, LeadColor = Theme.CardDim;
+    public float Before, After;
+    public float Inset;               // chừa bên phải (vd. chỗ cho nút "Ghi nhớ"), đơn vị 96 dpi       // khoảng cách trên/dưới (đơn vị 96 dpi)
 }
 
 /// <summary>Vùng hiển thị bản dịch: nhiều đoạn có kiểu khác nhau, cuộn bằng con lăn, thanh cuộn mảnh.</summary>
@@ -303,7 +307,7 @@ public sealed class RichView : Ctl
         {
             y += Px(b.Before);
             int leadW = b.Lead.Length > 0 ? Gfx.TextWidth(b.Lead, Fnt(b, true)) + Px(8) : 0;
-            int h = Math.Max(Fnt(b, false).Height, Gfx.Measure(b.Text, Fnt(b, false), Math.Max(10, textW - leadW)).Height);
+            int h = Math.Max(Fnt(b, false).Height, Gfx.Measure(b.Text, Fnt(b, false), Math.Max(10, textW - leadW - Px(b.Inset))).Height);
             _lay.Add((y, h, leadW));
             y += h + Px(b.After);
         }
@@ -335,14 +339,14 @@ public sealed class RichView : Ctl
             if (top + h < 0 || top > Height) continue;
             if (leadW > 0)
                 Gfx.Text(g, b.Lead, Fnt(b, true), new Rectangle(0, top, leadW, h), b.LeadColor, Gfx.Wrap);
-            Gfx.Text(g, b.Text, Fnt(b, false), new Rectangle(leadW, top, Math.Max(10, textW - leadW), h), b.Color, Gfx.Wrap);
+            Gfx.Text(g, b.Text, Fnt(b, false), new Rectangle(leadW, top, Math.Max(10, textW - leadW - Px(b.Inset)), h), b.Color, Gfx.Wrap);
         }
         if (_contentH > Height)
         {
             float th = Math.Max(Px(28), Height * (float)Height / _contentH);
             float ty = MaxScroll == 0 ? 0 : (Height - th) * _scroll / MaxScroll;
             g.SmoothingMode = SmoothingMode.AntiAlias;
-            Gfx.FillRound(g, Theme.C("#34415f"), new RectangleF(Width - Px(6), ty, Px(4), th), Px(2));
+            Gfx.FillRound(g, Theme.C("#3a4668"), new RectangleF(Width - Px(6), ty, Px(4), th), Px(2));
         }
     }
 }

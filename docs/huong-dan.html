@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hướng dẫn sử dụng SngTrans 2.0</title>
+<meta name="description" content="Hướng dẫn sử dụng SngTrans: cài đặt, thẻ dịch, phím tắt, ghi chú từ vựng, chặn app và cách xử lý lỗi thường gặp.">
+<style>
+:root{color-scheme:light dark;--bg:#f3f3f3;--card:#fff;--bd:#e3e3e3;--tx:#1b1b1b;--sub:#5f5f5f;--mu:#8a8a8a;--ac:#0f6cbd;--ach:#115ea3;--sel:#e6e6e6;--hov:#ebebeb;--fld:#fbfbfb;--fb:#d1d1d1;--info:#eaf3fc;--ib:#c4dcf2;--dg:#c42b1c;--dgb:#fde7e9}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:16px}
+body{margin:0;background:var(--bg);color:var(--tx);font:15.5px/1.65 "Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif}
+a{color:var(--ac)}a:hover{color:var(--ach)}
+.app{display:grid;grid-template-columns:250px 1fr;max-width:1180px;margin:0 auto;min-height:100vh}
+aside{position:sticky;top:0;height:100vh;padding:20px 12px;display:flex;flex-direction:column}
+.brand{display:flex;align-items:center;gap:10px;padding:0 8px 18px;font-weight:700;font-size:18px;text-decoration:none;color:var(--tx)}
+.brand i{display:grid;place-items:center;width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#60a5fa,#2563eb);color:#fff;font-style:normal;font-weight:800}
+nav{display:flex;flex-direction:column;gap:2px}
+nav a{position:relative;padding:8px 12px 8px 20px;border-radius:8px;color:var(--tx);text-decoration:none;font-size:14.5px}
+nav a:hover{background:var(--hov)}
+nav a.on{background:var(--sel);font-weight:600}
+nav a.on::before{content:"";position:absolute;left:5px;top:9px;bottom:9px;width:3px;border-radius:2px;background:var(--ac)}
+.side-foot{margin-top:auto;display:flex;flex-direction:column;gap:6px}
+.dl{display:block;text-align:center;background:var(--ac);color:#fff;text-decoration:none;font-weight:600;padding:9px 12px;border-radius:8px;font-size:14.5px}
+.dl:hover{background:var(--ach);color:#fff}
+.home{text-align:center;font-size:13.5px;color:var(--sub);text-decoration:none;padding:4px}
+main{padding:24px 24px 60px 8px;min-width:0}
+h1{font-size:28px;margin:0 0 2px;letter-spacing:-.01em}
+.ver{color:var(--sub);margin:0 0 18px;font-size:14px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:22px 26px;margin-bottom:14px}
+.card>h2{font-size:21px;margin:0 0 10px}
+h3{font-size:16.5px;margin:22px 0 4px}
+p,li{margin:6px 0}ul,ol{padding-left:22px}
+code,kbd{background:var(--fld);border:1px solid var(--fb);border-radius:5px;padding:0 6px;font:13.5px/1.6 Consolas,"Cascadia Mono",monospace}
+kbd{border-bottom-width:2px;font-weight:600}
+.info{background:var(--info);border:1px solid var(--ib);border-radius:8px;padding:10px 14px;margin:12px 0;font-size:14.5px}
+.tbl{overflow-x:auto;margin:10px 0}
+table{border-collapse:collapse;width:100%;font-size:14.5px;border:1px solid var(--bd);border-radius:8px}
+th,td{padding:8px 12px;text-align:left;border-bottom:1px solid var(--bd);vertical-align:top}
+th{background:var(--fld);font-weight:600}tr:last-child td{border-bottom:0}
+.rows{border:1px solid var(--bd);border-radius:10px;margin:12px 0;overflow:hidden}
+.row{display:flex;align-items:center;gap:14px;padding:11px 16px;border-bottom:1px solid var(--bd);background:var(--card)}
+.row:last-child{border-bottom:0}
+.row .t{flex:1;min-width:0}.row b{display:block;font-weight:600;font-size:14.5px}
+.row small{display:block;color:var(--sub);font-size:13px;line-height:1.45}
+.tg{width:40px;height:20px;border-radius:10px;background:var(--ac);position:relative;flex:none}
+.tg::after{content:"";position:absolute;top:3px;right:3px;width:14px;height:14px;border-radius:50%;background:#fff}
+.tg.off{background:transparent;border:1px solid #8a8a8a}
+.tg.off::after{right:auto;left:3px;background:#5f5f5f}
+.key{border:1px solid var(--fb);background:var(--fld);border-radius:6px;padding:4px 12px;font:600 13px Consolas,monospace;flex:none}
+.val{border:1px solid var(--fb);background:var(--fld);border-radius:6px;padding:4px 12px;font-size:13px;flex:none}
+figure{margin:14px 0;text-align:center}
+figcaption{font-size:13.5px;color:var(--sub);margin-top:8px}
+.imgs{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin:12px 0}
+.imgs figure{margin:0;border:1px solid var(--bd);border-radius:10px;overflow:hidden;text-align:left;background:var(--fld)}
+.imgs img{display:block;width:100%;height:auto}
+.imgs figcaption{padding:8px 12px;margin:0}
+.mock{background:#151c33;color:#f4f6fb;border:1px solid #2a3454;border-radius:16px;padding:16px 18px;max-width:370px;margin:0 auto;text-align:left;font-size:14.5px;box-shadow:0 12px 32px rgba(15,23,42,.22)}
+.mock .r{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.pill{background:#202a4a;border-radius:9px;padding:4px 10px;font-size:13px;color:#e8ecf8}
+.mock .s{color:#9aa6c4;font-size:13px;margin:0 0 6px}.mock .d{font-size:17px;margin:0 0 10px}
+.mock .tl{display:flex;gap:10px;color:#9aa6c4;padding-bottom:10px;border-bottom:1px solid #2a3454}
+.mock .f{display:flex;justify-content:space-between;align-items:center;margin-top:10px;font-size:12.5px;color:#7b87a8}
+.mock .n{background:#2563eb;color:#fff;font-weight:700;border-radius:9px;padding:5px 12px;font-size:13px}
+.menu{background:#fff;border:1px solid var(--bd);border-radius:12px;padding:4px;width:210px;margin:0 auto;text-align:left;font-size:13.5px;box-shadow:0 10px 28px rgba(0,0,0,.16)}
+.menu div{padding:4px 10px 4px 28px;border-radius:8px;position:relative}
+.menu .on::before{content:"✓";position:absolute;left:9px;color:var(--ac)}
+.menu .red{color:var(--dg)}.menu hr{border:0;border-top:1px solid var(--bd);margin:3px 8px}
+footer{color:var(--mu);font-size:13px;text-align:center;margin-top:20px}
+@media(max-width:860px){
+.app{grid-template-columns:1fr}
+aside{position:static;height:auto;padding:14px 14px 0}
+.brand{padding-bottom:10px}
+nav{flex-direction:row;overflow-x:auto;gap:4px;padding-bottom:6px}
+nav a{white-space:nowrap;padding:7px 12px}nav a.on::before{display:none}
+.side-foot{display:none}
+main{padding:12px 14px 50px}.card{padding:18px}}
+@media(prefers-color-scheme:dark){:root{--bg:#1c1c1c;--card:#272727;--bd:#3a3a3a;--tx:#f2f2f2;--sub:#b5b5b5;--mu:#8f8f8f;--ac:#60a5fa;--ach:#93c5fd;--sel:#333;--hov:#2e2e2e;--fld:#2f2f2f;--fb:#4a4a4a;--info:#1b2a3d;--ib:#2d4766;--dg:#ff8a80}
+.dl,.dl:hover{color:#0b1220}.menu{background:#fff;color:#1b1b1b;border-color:#e3e3e3}.menu .red{color:#c42b1c}.menu .on::before{color:#0f6cbd}.menu hr{border-top-color:#e3e3e3}.tg::after{background:#0b1220}.tg.off::after{background:#b5b5b5}.tg.off{border-color:#8f8f8f}}
+</style>
+</head>
+<body>
+<div class="app">
+<aside>
+  <a class="brand" href="./"><i>A</i> SngTrans</a>
+  <nav id="nav">
+    <a href="#bat-dau">Bắt đầu nhanh</a>
+    <a href="#cai-dat">Cài đặt</a>
+    <a href="#giao-dien">Giao diện</a>
+    <a href="#phim-tat">Phím tắt</a>
+    <a href="#thao-tac">Thao tác</a>
+    <a href="#loi">Lỗi thường gặp</a>
+    <a href="#thong-tin">Thông tin</a>
+  </nav>
+  <div class="side-foot">
+    <a class="dl" href="https://github.com/seangogroup-ops/SngTrans/releases/latest/download/SngTrans.exe">Tải cho Windows</a>
+    <a class="home" href="./">← Về trang chủ</a>
+  </div>
+</aside>
+
+<main>
+<h1>Hướng dẫn sử dụng SngTrans</h1>
+<p class="ver">Phiên bản 2.0 · Tháng 11 năm 2026</p>
+
+<section class="card" id="bat-dau">
+<h2>Bắt đầu nhanh</h2>
+<p>SngTrans chạy ngầm ở khay hệ thống. <b>Bôi đen chữ ở bất kỳ app nào</b> (Word, PDF, trình duyệt, chat…) là hiện thẻ dịch ngay trên con trỏ. Miễn phí, chạy trên Windows 10/11, cần có mạng.</p>
+<ol>
+  <li>Tải <code>SngTrans.exe</code> về và bấm đúp để chạy.</li>
+  <li>Lần đầu, hộp <b>Cài đặt</b> tự mở. Các lần sau app chạy ngầm, chỉ hiện một thông báo nhỏ.</li>
+  <li>Mở app bất kỳ, <b>bôi đen một câu tiếng Anh</b>. Bản dịch tiếng Việt hiện ngay.</li>
+</ol>
+<ul>
+  <li>26 ngôn ngữ, tự nhận diện ngôn ngữ nguồn, tự đảo chiều Việt ↔ Anh.</li>
+  <li>Thẻ dịch có nghĩa, từ đồng nghĩa, ví dụ, nghe đọc câu gốc và bản dịch.</li>
+  <li>Ghi chú từ vựng, xuất CSV mở bằng Excel.</li>
+  <li>Không làm mất clipboard: chữ, ảnh, file, HTML, RTF được trả về như cũ.</li>
+</ul>
+</section>
+
+<section class="card" id="cai-dat">
+<h2>Cài đặt</h2>
+<p>SngTrans là <b>một file <code>.exe</code> duy nhất</b>, không cần trình cài đặt. Đặt ở thư mục nào cũng được. Cài đặt và ghi chú lưu riêng ở <code>%APPDATA%\SngTrans</code> nên đổi chỗ file không mất dữ liệu.</p>
+<div class="tbl"><table>
+<tr><th>File</th><th>Đặc điểm</th></tr>
+<tr><td><code>SngTrans.exe</code> (đầy đủ)</td><td>Khoảng 50–70 MB, tự chứa .NET, chạy được mọi nơi. <b>Nên dùng nếu không chắc.</b></td></tr>
+<tr><td><code>SngTrans-nhe.exe</code> (nhẹ)</td><td>Chỉ vài MB. Máy cần cài <b>.NET 10 Desktop Runtime</b> một lần.</td></tr>
+</table></div>
+<h3>Máy hiện cảnh báo khi mở app?</h3>
+<p>File chưa có chữ ký số nên trình duyệt và Windows có thể cảnh báo. Làm theo 3 bước:</p>
+<div class="imgs">
+  <figure><img src="anh/buoc1-keep.jpg" alt="Bước 1: bấm dấu ba chấm rồi chọn Keep" loading="lazy"><figcaption><b>Bước 1.</b> Bấm <b>⋯</b> rồi chọn <b>Keep</b>.</figcaption></figure>
+  <figure><img src="anh/buoc2-more-info.jpg" alt="Bước 2: bấm More info" loading="lazy"><figcaption><b>Bước 2.</b> Bấm <b>More info</b>.</figcaption></figure>
+  <figure><img src="anh/buoc3-run-anyway.jpg" alt="Bước 3: bấm Run anyway" loading="lazy"><figcaption><b>Bước 3.</b> Bấm <b>Run anyway</b>.</figcaption></figure>
+</div>
+</section>
+
+<section class="card" id="giao-dien">
+<h2>Giao diện</h2>
+
+<h3>Thẻ dịch</h3>
+<p>Hiện khi bạn bôi đen chữ hoặc bấm phím tắt dịch.</p>
+<figure>
+  <div class="mock" aria-hidden="true">
+    <div class="r"><span class="pill">🇰🇷 한국어</span><span style="color:#9aa6c4">→</span><span class="pill">🇻🇳 Tiếng Việt</span></div>
+    <p class="s">안녕하세요. 만나서 반갑습니다.</p>
+    <p class="d">Xin chào. Rất vui được gặp bạn.</p>
+    <div class="tl"><span>🔊</span><span>⧉</span></div>
+    <div class="f"><span>☐ Không dịch app này</span><span class="n">Ghi nhớ</span></div>
+  </div>
+  <figcaption>Hình 1. Thẻ dịch (minh hoạ)</figcaption>
+</figure>
+<ul>
+  <li><b>Hai viên ngôn ngữ</b> ở đầu thẻ: nguồn (mặc định <i>Tự động</i>) và đích. Bấm để đổi cho lần dịch này.</li>
+  <li><b>Đổi chiều dịch</b>, <b>Ghim</b> (giữ thẻ không tự đóng), <b>Đóng</b>.</li>
+  <li>Từ hoặc cụm từ ngắn có thêm <i>Nghĩa</i>, <i>Từ đồng nghĩa</i>, <i>Ví dụ</i>. Đoạn dài chỉ hiện bản dịch cho nhanh.</li>
+  <li><b>Nghe câu gốc</b>, <b>Nghe bản dịch</b>, <b>Sao chép bản dịch</b>, <b>Ghi nhớ</b>, <b>Không dịch app này</b>.</li>
+  <li><b>Thử lại</b> hiện khi dịch lỗi (thường do mất mạng).</li>
+</ul>
+<p><kbd>Esc</kbd> hoặc bấm ra ngoài để đóng. Kéo vùng trống của thẻ để di chuyển.</p>
+
+<h3>Biểu tượng khay và menu</h3>
+<p>Biểu tượng nằm ở góc phải dưới màn hình. <b>Windows 11 hay giấu nó sau mũi tên <code>^</code></b>. Bấm chuột trái để mở Cài đặt, bấm chuột phải để hiện menu.</p>
+<figure>
+  <div class="menu" aria-hidden="true"><div class="on">Tự dịch</div><div>Ghi chú</div><div>Cài đặt</div><div>Cập nhật (v2.0.0)</div><hr><div class="red">Thoát</div></div>
+  <figcaption>Hình 2. Menu khay (minh hoạ)</figcaption>
+</figure>
+<div class="tbl"><table>
+<tr><th>Mục</th><th>Tác dụng</th></tr>
+<tr><td>Tự dịch</td><td>Bật/tắt tự dịch khi bôi đen. Dấu ✓ là đang bật.</td></tr>
+<tr><td>Ghi chú</td><td>Mở thẳng trang Ghi chú.</td></tr>
+<tr><td>Cài đặt</td><td>Mở hộp Cài đặt.</td></tr>
+<tr><td>Cập nhật (vX.Y.Z)</td><td>Kiểm tra bản mới ngay.</td></tr>
+<tr><td>Thoát</td><td>Tắt hẳn SngTrans.</td></tr>
+</table></div>
+
+<h3>Hộp Cài đặt</h3>
+<p>Thanh bên trái có 3 trang: <b>Cài đặt</b>, <b>Chặn app</b>, <b>Ghi chú</b>, và nút đỏ <b>Tắt app</b> ở đáy. Mọi thay đổi lưu ngay, không có nút “Lưu”. Trang <b>Cài đặt</b> gồm:</p>
+<div class="rows">
+  <div class="row"><div class="t"><b>Ngôn ngữ</b><small>Tiếng mẹ đẻ và ngoại ngữ. Mặc định Tiếng Việt ↔ English.</small></div><span class="val">Việt ⇄ English</span></div>
+  <div class="row"><div class="t"><b>Tự dịch khi bôi đen</b><small>Bôi đen là hiện thẻ dịch. Tắt thì chỉ dịch khi bấm phím tắt.</small></div><span class="tg"></span></div>
+  <div class="row"><div class="t"><b>Dịch bằng phím tắt</b><small>Dịch đoạn đang bôi đen · Backspace: mặc định</small></div><span class="key">Alt + 1</span></div>
+  <div class="row"><div class="t"><b>Phím bật/tắt tự dịch</b><small>Bật/tắt tự dịch · Backspace: mặc định</small></div><span class="key">Alt + 2</span></div>
+  <div class="row"><div class="t"><b>Tự đảo chiều</b><small>Chữ tiếng mẹ đẻ dịch sang ngoại ngữ và ngược lại, khỏi đổi tay.</small></div><span class="tg"></span></div>
+  <div class="row"><div class="t"><b>Chỉ khi con trỏ là chữ I</b><small>Tránh dịch nhầm khi kéo thả file. Mặc định tắt.</small></div><span class="tg off"></span></div>
+  <div class="row"><div class="t"><b>Chạy cùng Windows</b><small>Tự chạy ngầm khi bật máy. Mặc định bật ở lần chạy đầu.</small></div><span class="tg"></span></div>
+</div>
+<p><b>Đổi phím tắt:</b> bấm vào ô phím, nhấn tổ hợp mới (phải kèm <kbd>Ctrl</kbd> hoặc <kbd>Alt</kbd>), <kbd>Esc</kbd> để huỷ, <kbd>Backspace</kbd> để về mặc định.</p>
+<p><b>Chặn app:</b> danh sách app mà SngTrans không hiện thẻ khi bạn bôi đen trong đó. <b>Ghi chú:</b> nơi lưu các từ, câu đã bấm <i>Ghi nhớ</i>, có ô tìm kiếm, <i>Xuất CSV</i> và <i>Xoá hết</i>.</p>
+</section>
+
+<section class="card" id="phim-tat">
+<h2>Phím tắt</h2>
+<div class="rows">
+  <div class="row"><div class="t"><b>Dịch ngay phần đang bôi đen</b><small>Đổi được trong Cài đặt</small></div><span class="key">Alt + 1</span></div>
+  <div class="row"><div class="t"><b>Bật/tắt Tự dịch khi bôi đen</b><small>Ở mọi app, có thông báo nhỏ. Đổi được trong Cài đặt</small></div><span class="key">Alt + 2</span></div>
+  <div class="row"><div class="t"><b>Đóng thẻ dịch hoặc menu khay</b></div><span class="key">Esc</span></div>
+  <div class="row"><div class="t"><b>Tắt hẳn SngTrans</b><small>Dùng được ở bất kỳ cửa sổ nào</small></div><span class="key">Ctrl + Alt + Shift + Q</span></div>
+</div>
+<div class="info">Thấy thông báo “Phím tắt … đang bị app khác dùng”? Hãy đổi sang tổ hợp khác trong Cài đặt.</div>
+</section>
+
+<section class="card" id="thao-tac">
+<h2>Thao tác với SngTrans</h2>
+
+<h3>Khởi động và kết thúc</h3>
+<ul>
+  <li><b>Khởi động:</b> bấm đúp <code>SngTrans.exe</code>. Nếu app đang chạy ngầm, bấm đúp lần nữa sẽ mở Cài đặt.</li>
+  <li><b>Kết thúc:</b> chuột phải biểu tượng khay → <b>Thoát</b>; hoặc nút đỏ <b>Tắt app</b> trong Cài đặt; hoặc <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>Q</kbd>; hoặc không cần mở app: bấm đúp <code>Tat-SngTrans.bat</code> / chạy <code>SngTrans.exe --quit</code>.</li>
+</ul>
+
+<h3>Dịch một đoạn chữ</h3>
+<ol>
+  <li>Bôi đen bằng cách kéo chuột, nhấp đúp (một từ) hoặc nhấp ba (cả đoạn).</li>
+  <li>Thẻ dịch hiện ngay trên con trỏ. Nếu <i>Tự dịch</i> đang tắt, bôi đen rồi bấm <kbd>Alt</kbd>+<kbd>1</kbd>.</li>
+  <li>Muốn đọc lâu, bấm <b>Ghim</b>.</li>
+</ol>
+
+<h3>Bật, tắt tự dịch</h3>
+<p>Bấm <kbd>Alt</kbd>+<kbd>2</kbd>, hoặc menu khay → <b>Tự dịch</b>, hoặc gạt công tắc trong Cài đặt. Ba cách này luôn đồng bộ.</p>
+
+<h3>Chọn ngôn ngữ</h3>
+<p>Cài đặt → <b>Ngôn ngữ</b>. Có 26 ngôn ngữ: Tiếng Việt, English, 日本語, 한국어, 中文 (简体/繁體), Français, Deutsch, Español, Português, Italiano, Русский, ไทย, Bahasa Indonesia, العربية, हिन्दी, Türkçe, Nederlands, Polski, Українська, Svenska, Bahasa Melayu, Filipino, Ελληνικά, Čeština, עברית. Khi <b>Tự đảo chiều</b> bật, chữ tiếng Việt dịch sang ngoại ngữ và chữ ngoại ngữ dịch sang tiếng Việt.</p>
+
+<h3>Nghe đọc</h3>
+<p>Bấm biểu tượng loa cạnh câu gốc hoặc bản dịch. Nếu không phát được qua mạng, app dùng giọng đọc có sẵn của Windows (offline). Máy cần cài giọng của ngôn ngữ đó: <i>Cài đặt Windows → Thời gian &amp; ngôn ngữ → Giọng nói</i>.</p>
+
+<h3>Lưu và xuất ghi chú</h3>
+<ol>
+  <li>Trên thẻ dịch, bấm <b>Ghi nhớ</b>.</li>
+  <li>Xem lại ở menu khay → <b>Ghi chú</b>, dùng ô tìm kiếm để lọc.</li>
+  <li>Bấm <b>Xuất CSV</b> để lưu <code>ghi_chu.csv</code> (chữ gốc, bản dịch), mở bằng Excel không lỗi tiếng Việt.</li>
+</ol>
+
+<h3>Chặn một app không cần dịch</h3>
+<p>Trên thẻ dịch, tick <b>Không dịch app này</b>. Muốn bật lại: Cài đặt → <b>Chặn app</b> → bỏ app khỏi danh sách.</p>
+
+<h3>Cập nhật phiên bản mới</h3>
+<p>App tự kiểm tra bản mới trên GitHub Releases (20 giây sau khi mở, rồi 6 giờ một lần). Có bản mới sẽ hiện hộp thông báo với nút <b>Cập nhật</b>: app tự tải, kiểm tra SHA256, thay file và mở lại. Kiểm tra ngay: menu khay → <b>Cập nhật</b>.</p>
+</section>
+
+<section class="card" id="loi">
+<h2>Lỗi thường gặp</h2>
+<h3>Không thấy biểu tượng ở khay</h3>
+<p>Windows 11 giấu biểu tượng sau mũi tên <code>^</code> ở góc phải taskbar. Bấm mũi tên đó để thấy.</p>
+<h3>Bôi đen mà không hiện thẻ</h3>
+<ul>
+  <li>Kiểm tra <b>Tự dịch</b> đang bật (có ✓ ở menu khay). Thử <kbd>Alt</kbd>+<kbd>1</kbd>.</li>
+  <li>Kiểm tra app đó có nằm trong <b>Chặn app</b> không.</li>
+  <li>Nếu bật <i>Chỉ khi con trỏ là chữ I</i>, app nào không dùng con trỏ chữ I sẽ không dịch được. Hãy tắt mục này.</li>
+  <li>Cửa sổ dòng lệnh (cmd, PowerShell, Windows Terminal) bị bỏ qua có chủ ý vì <kbd>Ctrl</kbd>+<kbd>C</kbd> ở đó là lệnh ngắt chương trình.</li>
+  <li>App đang chạy bằng <i>Run as administrator</i>: hãy chạy SngTrans bằng quyền admin tương ứng.</li>
+</ul>
+<h3>“Không dịch được” hoặc “Vui lòng kết nối mạng rồi thử lại”</h3>
+<p>SngTrans dùng dịch vụ dịch miễn phí của Google nên <b>cần có mạng</b>. Nếu dịch quá nhiều trong thời gian ngắn, dịch vụ có thể tạm giới hạn: chờ vài giây rồi bấm <b>Thử lại</b>.</p>
+<h3>Phím tắt không hoạt động</h3>
+<p>Có thể app khác đang chiếm tổ hợp đó. Đổi sang tổ hợp khác trong Cài đặt.</p>
+<h3>Cần nhờ hỗ trợ</h3>
+<p>Nhật ký luôn nằm ở <code>%APPDATA%\SngTrans\sngtrans.log</code>. Gửi file này kèm mô tả lỗi. Gửi về <a href="mailto:seangogroup@gmail.com">seangogroup@gmail.com</a>.</p>
+</section>
+
+<section class="card" id="thong-tin">
+<h2>Thông tin về SngTrans</h2>
+<ul>
+  <li>Phiên bản 2.0.</li>
+  <li>Cài đặt và ghi chú của bạn được lưu ngay trên máy, không mất khi cập nhật phiên bản mới.</li>
+  <li>Cần hỗ trợ hoặc góp ý: <a href="mailto:seangogroup@gmail.com">seangogroup@gmail.com</a>.</li>
+</ul>
+</section>
+<footer>SngGroup · Hướng dẫn sử dụng SngTrans 2.0</footer>
+</main>
+</div>
+<script>
+(function(){
+  var links=[].slice.call(document.querySelectorAll('#nav a')),
+      secs=links.map(function(a){return document.querySelector(a.getAttribute('href'))});
+  function spy(){
+    var y=window.scrollY+120,cur=0;
+    secs.forEach(function(s,i){if(s&&s.offsetTop<=y)cur=i});
+    if(window.innerHeight+window.scrollY>=document.body.scrollHeight-4)cur=secs.length-1;
+    links.forEach(function(a,i){a.classList.toggle('on',i===cur)});
+  }
+  addEventListener('scroll',spy,{passive:true});spy();
+})();
+</script>
+</body>
+</html>

@@ -1,4 +1,3 @@
-using System.Diagnostics;
 namespace SngTrans.Ui;
 
 /// <summary>Chương trình chạy ngầm ở khay hệ thống: nối hook, thẻ dịch, cài đặt, đọc to.</summary>
@@ -19,30 +18,57 @@ public sealed class TrayApp : ApplicationContext
 
     readonly System.Windows.Forms.Timer _upd = new() { Interval = 6 * 3600 * 1000 };   // 6 giờ kiểm tra cập nhật một lần
     bool _checking;
-    string _notifiedTag = "";
+    readonly System.Windows.Forms.Timer _toggleNote = new() { Interval = 350 };   // báo bật/tắt tự dịch sau khi ngừng bấm
+    long _shownAt;                                        // lúc hiện thẻ gần nhất (để bỏ qua bấm lặp cùng một đoạn chữ)
+    string _failedTag = "";                               // bản đã tự cài lỗi: không thử lại cho tới khi có bản khác hoặc mở lại app
 
     SettingsForm? _dialog;
     TrayMenu? _menu;
-    string _hotkeyActive;
+    string _hotkeyActive, _toggleActive;
     int _rid, _current;
     string _text = "", _exe = "";
 
     public TrayApp(bool openSettings = false)
     {
         _ = _sync.Handle;
-        Translator.WarmUp();                         // mở sẵn kết nối để lần dịch đầu không bị chậm
+
+        // Hiện icon khay NGAY (rẻ) rồi mới dựng phần nặng, để người dùng thấy app đã lên.
+        _tray.Text = "SngTrans";
+        _tray.Icon = LoadIcon();
+        _tray.MouseClick += (_, e) => { if (e.Button == MouseButtons.Left) OpenSettings(false); };
+        _tray.MouseUp += (_, e) => { if (e.Button == MouseButtons.Right) ShowTrayMenu(); };
+        _tray.Visible = true;
+
+        // Mở sẵn kết nối để lần dịch đầu không chậm. Làm hoàn toàn ở luồng nền và chờ có mạng:
+        // lúc vừa đăng nhập mạng thường chưa sẵn sàng, gọi sớm chỉ tốn công (và khởi tạo HttpClient trên luồng giao diện).
+        _ = Task.Run(async () =>
+        {
+            // Có mạng rồi thì làm nóng ngay; chưa có thì dò mỗi 0,5 giây (tối đa ~15 giây) rồi làm nóng.
+            for (int i = 0; i < 30 && !System.Net.NetworkInformation.NetworkInterface.GetIsNetworkAvailable(); i++)
+                await Task.Delay(500).ConfigureAwait(false);
+            Translator.WarmUp();
+        });
 
         _card = new Card(_settings);
         _ = _card.Handle;                            // tạo cửa sổ sẵn để lần hiện đầu không bị chậm
         _watcher = new Watcher(_settings, _card);
         _hotkeyActive = _settings.Hotkey;
+        _toggleActive = _settings.ToggleHotkey;
 
         _watcher.TextSelected += (t, e) => UI(() => OnSelected(t, e));
         _watcher.OutsideClick += () => UI(() => _card.Hide());
         _watcher.Escape += () => UI(() => { if (_card.Visible && !_card.Pinned) _card.Hide(); });
+        _toggleNote.Tick += (_, _) =>
+        {
+            _toggleNote.Stop();
+            bool on = _settings.Auto;
+            Log.Info($"tự dịch khi bôi đen: {(on ? "bật" : "tắt")} (phím tắt)");
+            Balloon("SngTrans", on ? "Đã BẬT tự dịch khi bôi đen." : "Đã TẮT tự dịch khi bôi đen.", 1500);
+        };
         _hotkeys.Pressed += id =>
         {
             if (id == HotkeyWindow.IdTranslate) _watcher.TriggerHotkey();
+            else if (id == HotkeyWindow.IdToggle) ToggleAuto();            // đã ở luồng giao diện: chạy ngay, không qua hàng đợi
             else if (id == HotkeyWindow.IdForceQuit) ForceQuit();
         };
 
@@ -58,6 +84,7 @@ public sealed class TrayApp : ApplicationContext
         _trim.Tick += (_, _) =>
         {
             _trim.Stop();
+            _trim.Interval = 4000;
             if (!_card.Visible)
             {
                 GC.Collect();
@@ -67,18 +94,11 @@ public sealed class TrayApp : ApplicationContext
 
         _idle.Tick += (_, _) =>
         {
-            if (_card.Visible || (_dialog != null && !_dialog.IsDisposed)) return;     // đang dùng thì thôi
+            if (InUse) return;                                  // đang dùng thì thôi
             GC.Collect(2, GCCollectionMode.Forced, true, true);
             Win32.TrimMemory();
         };
         _idle.Start();
-
-        // ----- khay hệ thống (menu tự vẽ, mở khi bấm chuột phải)
-        _tray.Text = "SngTrans";
-        _tray.Icon = LoadIcon();
-        _tray.MouseClick += (_, e) => { if (e.Button == MouseButtons.Left) OpenSettings(false); };
-        _tray.MouseUp += (_, e) => { if (e.Button == MouseButtons.Right) ShowTrayMenu(); };
-        _tray.Visible = true;
 
         _watcher.Start();
         RegisterHotkeys(announce: true);
@@ -87,12 +107,13 @@ public sealed class TrayApp : ApplicationContext
         {
             _settings.Update(d => d.FirstRun = false);
             EnableBootByDefault();                       // mặc định chạy ngầm cùng Windows; tắt ở Cài đặt
-            OpenSettings(true);
+            ShowGuideIfNew(() => OpenSettings(true));    // hướng dẫn trước, đóng xong mới mở hộp Cài đặt
         }
         else if (openSettings)
             OpenSettings(false);                         // mở bằng --settings (vd. ngay sau khi build): hiện hộp Cài đặt
-        else
+        else if (!ShowGuideIfNew())                      // mới tải về / vừa cập nhật phiên bản: hiện hướng dẫn một lần
             Balloon("SngTrans đang chạy", "Bôi đen chữ ở bất kỳ đâu để dịch. Bấm vào biểu tượng khay để cài đặt.", 4000);
+        _trim.Interval = 30_000;                         // lần dọn RAM đầu: chờ 30 giây cho máy hết bận lúc khởi động
         _trim.Start();
 
         // ----- mở app lần nữa (bấm đúp exe/shortcut) khi đang chạy ngầm -> hiện hộp Cài đặt
@@ -102,7 +123,7 @@ public sealed class TrayApp : ApplicationContext
             while (showEv.WaitOne()) UI(() => OpenSettings(false));
         }) { IsBackground = true, Name = "SngTrans.ShowSettings" }.Start();
 
-        // ----- tự kiểm tra bản mới (sau 20 giây khi mở máy, rồi 6 giờ một lần)
+        // ----- tự kiểm tra và tự cài bản mới (sau 20 giây khi mở máy, rồi 6 giờ một lần)
         _upd.Tick += (_, _) => CheckUpdate(false);
         _upd.Start();
         _ = Task.Delay(20_000).ContinueWith(_ => UI(() => CheckUpdate(false)));
@@ -112,12 +133,8 @@ public sealed class TrayApp : ApplicationContext
     {
         try
         {
-            var path = Environment.ProcessPath;
-            if (path != null)
-            {
-                var ico = Icon.ExtractAssociatedIcon(path);
-                if (ico != null) return ico;
-            }
+            using var s = typeof(TrayApp).Assembly.GetManifestResourceStream("icon.ico");
+            if (s != null) return new Icon(s, SystemInformation.SmallIconSize);   // icon nhúng sẵn: không phải mở exe lớn để trích icon
         }
         catch { }
         return Theme.LogoIcon(32);
@@ -148,8 +165,25 @@ public sealed class TrayApp : ApplicationContext
             if (announce)
                 Balloon("SngTrans", $"Phím tắt {HotkeySpec.Pretty(_settings.Hotkey).Replace("  ", "")} đang bị app khác dùng. Đổi phím khác trong Cài đặt.", 5000, ToolTipIcon.Warning);
         }
+        if (!_hotkeys.Register(HotkeyWindow.IdToggle, _settings.ToggleHotkey))
+        {
+            Log.Info($"không đăng ký được phím tắt bật/tắt tự dịch {_settings.ToggleHotkey} (có thể đang bị app khác dùng)");
+            if (announce)
+                Balloon("SngTrans", $"Phím bật/tắt tự dịch {HotkeySpec.Pretty(_settings.ToggleHotkey).Replace("  ", "")} đang bị app khác dùng. Đổi phím khác trong Cài đặt.", 5000, ToolTipIcon.Warning);
+        }
         if (!_hotkeys.Register(HotkeyWindow.IdForceQuit, HotkeySpec.ForceQuit))
             Log.Info("không đăng ký được phím tắt tắt hẳn");
+    }
+
+    /// <summary>Bật/tắt "Tự dịch khi bôi đen" (phím tắt, mặc định Alt+2).</summary>
+    void ToggleAuto()
+    {
+        bool on = !_settings.Auto;
+        _settings.UpdateDeferred(d => d.Auto = on);          // đổi tức thì trong bộ nhớ; ghi file dồn lại sau
+        _dialog?.SyncFromSettings();
+        if (!on && !_card.Pinned) _card.Hide();
+        _toggleNote.Stop();                                  // bấm dồn: chỉ báo trạng thái cuối cùng, sau khi người dùng ngừng bấm
+        _toggleNote.Start();
     }
 
     void SetCapturing(bool capturing)
@@ -167,18 +201,13 @@ public sealed class TrayApp : ApplicationContext
         {
             new()
             {
-                Text = "Tự dịch khi bôi đen", Checked = _settings.Auto,
+                Text = "Tự dịch", Checked = _settings.Auto,
                 Click = () => { _settings.Update(d => d.Auto = !d.Auto); _dialog?.SyncFromSettings(); },
             },
-            new()
-            {
-                Text = "Chạy cùng Windows", Checked = Win32.IsAutostart(),
-                Click = () => { SetBoot(!Win32.IsAutostart()); _dialog?.SyncFromSettings(); },
-            },
-            new() { Text = "Cài đặt & ghi chú…", Click = () => OpenSettings(false) },
-            new() { Text = $"Kiểm tra cập nhật (v{Updater.Current.ToString(3)})", Click = () => CheckUpdate(true) },
-            new() { Separator = true },
-            new() { Text = "Kết thúc tác vụ", Danger = true, Click = ForceQuit },
+            new() { Text = "Ghi chú", Click = () => OpenSettings(false, VocabPage) },
+            new() { Text = "Cài đặt", Click = () => OpenSettings(false) },
+            new() { Text = $"Cập nhật (v{Updater.Current.ToString(3)})", Click = () => CheckUpdate(true) },
+            new() { Text = "Thoát", Danger = true, Click = ForceQuit },
         };
         _menu = TrayMenu.Open(items, Cursor.Position);
     }
@@ -193,17 +222,33 @@ public sealed class TrayApp : ApplicationContext
         Log.Info($"bật chạy cùng Windows mặc định -> {(ok ? "ok" : "lỗi")}");
     }
 
-    void SetBoot(bool on)
+    /// <summary>Chỉ số trang Ghi chú trong hộp Cài đặt (0 = Cài đặt, 1 = Chặn app, 2 = Ghi chú).</summary>
+    const int VocabPage = 2;
+
+    GuideForm? _guide;
+
+    /// <summary>Hiện màn hướng dẫn đúng một lần cho mỗi phiên bản: lần đầu tải về hoặc sau khi cập nhật.
+    /// Đánh dấu "đã xem" ngay lúc hiện nên có tắt đột ngột cũng không hiện lại. Trả về true nếu đã hiện.</summary>
+    bool ShowGuideIfNew(Action? after = null)
     {
-        bool ok = Win32.SetAutostart(on);
-        Log.Info($"chạy cùng Windows: {(on ? "bật" : "tắt")} -> {(ok ? "ok" : "lỗi")}");
-        if (ok)
-            Balloon("SngTrans", on ? "SngTrans sẽ tự chạy ngầm mỗi khi bật máy." : "Đã tắt chạy cùng Windows.", 2500);
-        else
-            Balloon("SngTrans", "Không đổi được cài đặt khởi động cùng Windows.", 4000, ToolTipIcon.Warning);
+        string cur = Updater.Current.ToString(3);
+        if (_settings.Data.SeenGuide == cur) { after?.Invoke(); return false; }
+        _settings.Update(d => d.SeenGuide = cur);
+        _guide = new GuideForm(_settings);
+        _guide.FormClosed += (_, _) =>
+        {
+            var g = _guide;
+            _guide = null;
+            g?.Dispose();
+            _trim.Stop(); _trim.Start();
+            after?.Invoke();
+        };
+        _guide.Show();
+        Win32.ForceForeground(_guide.Handle);
+        return true;
     }
 
-    void OpenSettings(bool welcome)
+    void OpenSettings(bool welcome, int? page = null)
     {
         if (_dialog == null || _dialog.IsDisposed)
         {
@@ -226,15 +271,17 @@ public sealed class TrayApp : ApplicationContext
             if (_dialog.WindowState == FormWindowState.Minimized) _dialog.WindowState = FormWindowState.Normal;
             _dialog.Show();
         }
+        if (page is int p) _dialog.ShowPage(p);
         _dialog.Activate();
         Win32.ForceForeground(_dialog.Handle);
     }
 
     void OnSettingsChanged()
     {
-        if (_settings.Hotkey != _hotkeyActive)        // chỉ nạp lại khi đổi phím tắt
+        if (_settings.Hotkey != _hotkeyActive || _settings.ToggleHotkey != _toggleActive)   // chỉ nạp lại khi đổi phím tắt
         {
             _hotkeyActive = _settings.Hotkey;
+            _toggleActive = _settings.ToggleHotkey;
             RegisterHotkeys(announce: true);
         }
     }
@@ -242,6 +289,13 @@ public sealed class TrayApp : ApplicationContext
     // ---------------------------------------------------------------- dịch
     void OnSelected(string text, string exe)
     {
+        long now = Environment.TickCount64;
+        if (_card.Visible && text == _text && exe == _exe && now - _shownAt < 1500)
+        {
+            Win32.TopMostNoActivate(_card.Handle);        // bấm lặp cùng đoạn chữ: chỉ đưa thẻ lên trên, khỏi dịch lại
+            return;
+        }
+        _shownAt = now;
         Log.Info($"hiện thẻ cho {text.Length} ký tự từ {exe}");
         var anchor = Cursor.Position;
         _exe = exe;
@@ -330,6 +384,10 @@ public sealed class TrayApp : ApplicationContext
     }
 
     // ---------------------------------------------------------------- cập nhật
+    /// <summary>true khi đang dùng app (thẻ dịch hoặc hộp Cài đặt đang mở): không nên khởi động lại lúc này.</summary>
+    bool InUse => _card.Visible || (_dialog != null && !_dialog.IsDisposed) || (_guide != null && !_guide.IsDisposed);
+
+    /// <summary>Tự cập nhật, không hỏi và không hiện thông báo. manual = true khi bấm "Cập nhật" ở menu khay.</summary>
     async void CheckUpdate(bool manual)
     {
         if (_checking) return;
@@ -344,47 +402,32 @@ public sealed class TrayApp : ApplicationContext
                         "SngTrans", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
-            if (manual) Balloon("SngTrans", "Đang kiểm tra cập nhật…", 2000);
             var info = await Task.Run(() => Updater.CheckAsync());
-            if (info == null)
-            {
-                if (manual) Balloon("SngTrans", $"Bạn đang dùng bản mới nhất (v{Updater.Current.ToString(3)}).", 3000);
-                return;
-            }
-            if (!manual && info.Tag == _notifiedTag) return;          // báo tự động chỉ một lần cho mỗi phiên bản
-            _notifiedTag = info.Tag;
-
-            var notes = info.Notes.Trim();
-            if (notes.Length > 600) notes = notes[..600] + "…";
-            var now = new TaskDialogButton(info.AssetUrl != null ? "Cập nhật ngay" : "Mở trang tải");
-            var page = new TaskDialogPage
-            {
-                Caption = "SngTrans",
-                Heading = $"Có bản mới: v{info.Version.ToString(3)}",
-                Text = $"Bạn đang dùng v{Updater.Current.ToString(3)}." + (notes.Length > 0 ? "\n\n" + notes : ""),
-                Icon = TaskDialogIcon.Information,
-            };
-            page.Buttons.Add(now);
-            page.Buttons.Add(new TaskDialogButton("Để sau"));
-            if (TaskDialog.ShowDialog(page) != now) return;
+            if (info == null) return;                                // đang dùng bản mới nhất
+            if (!manual && info.Tag == _failedTag) return;           // tự cài bản này đã lỗi một lần: đừng thử lại liên tục
 
             if (info.AssetUrl != null)
             {
-                Balloon("SngTrans", "Đang tải bản mới, vui lòng chờ…", 4000);
+                // Chờ lúc không dùng app rồi mới cài, tránh làm mất thẻ dịch hoặc cài đặt đang mở.
+                while (InUse) await Task.Delay(15_000);
+
+                Log.Info($"tự cập nhật {Updater.Current.ToString(3)} -> {info.Version.ToString(3)}");
                 if (await Task.Run(() => Updater.ApplyAsync(info)))
                 {
                     try { _watcher.Stop(); _tray.Visible = false; } catch { }
+                    _settings.Flush();
                     Environment.Exit(0);                              // bản mới đã được mở
                     return;
                 }
-                Balloon("SngTrans", "Không tự cập nhật được, đã mở trang tải.", 4000, ToolTipIcon.Warning);
+                _failedTag = info.Tag;
+                Log.Info("tự cập nhật không thành công (tải lỗi, thiếu hoặc sai SHA256)");
+                if (!manual) return;                                  // chạy ngầm: im lặng, lần sau thử bản khác
             }
-            try { Process.Start(new ProcessStartInfo(info.PageUrl) { UseShellExecute = true })?.Dispose(); } catch { }
+            if (manual) Updater.OpenUrl(info.PageUrl);                // chỉ mở trình duyệt khi người dùng tự bấm
         }
         catch (Exception e)
         {
             Log.Info("kiểm tra cập nhật lỗi: " + e.Message);
-            if (manual) Balloon("SngTrans", "Không kiểm tra được cập nhật. Kiểm tra lại kết nối mạng.", 4000, ToolTipIcon.Warning);
         }
         finally { _checking = false; }
     }
@@ -392,6 +435,7 @@ public sealed class TrayApp : ApplicationContext
     // ---------------------------------------------------------------- thoát
     void Quit()
     {
+        _settings.Flush();
         _watcher.Stop();
         _hotkeys.Dispose();
         _tray.Visible = false;
@@ -405,6 +449,7 @@ public sealed class TrayApp : ApplicationContext
     void ForceQuit()
     {
         Log.Info("tắt hẳn (kết thúc tác vụ)");
+        _settings.Flush();
         try
         {
             _watcher.Stop();

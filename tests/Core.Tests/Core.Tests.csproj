@@ -13,5 +13,6 @@
     <Compile Include="../../Native/Win32.cs" />
     <Compile Include="../../Services/Watcher.cs" />
     <Compile Include="../../Services/Tts.cs" />
+    <Compile Include="../../Services/Updater.cs" />
   </ItemGroup>
 </Project>

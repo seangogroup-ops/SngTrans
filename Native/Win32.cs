@@ -360,8 +360,19 @@ public static class Win32
 
     public static void SendCtrlC()
     {
-        var seq = new[] { Key(VK_CONTROL, false), Key(VK_C, false), Key(VK_C, true), Key(VK_CONTROL, true) };
-        SendInput((uint)seq.Length, seq, Marshal.SizeOf<INPUT>());
+        var seq = new List<INPUT>(8);
+        if ((GetAsyncKeyState(VK_MENU) & 0x8000) != 0)
+        {
+            // Alt vẫn đang giữ (hay gặp khi bấm dồn Alt+phím): nếu cứ gửi Ctrl+C thì app nhận Ctrl+Alt+C (không chép được),
+            // còn khi Alt nhả ra mà không có phím nào xen giữa, Windows bật thanh menu của app. Chèn một phím trống (0xE8)
+            // để Windows coi là "đã dùng Alt cho phím khác", rồi nhả Alt giả trước khi gửi Ctrl+C.
+            seq.Add(Key(0xE8, false)); seq.Add(Key(0xE8, true));
+            seq.Add(Key(VK_MENU, true));
+        }
+        seq.Add(Key(VK_CONTROL, false)); seq.Add(Key(VK_C, false));
+        seq.Add(Key(VK_C, true)); seq.Add(Key(VK_CONTROL, true));
+        var arr = seq.ToArray();
+        SendInput((uint)arr.Length, arr, Marshal.SizeOf<INPUT>());
     }
 
     /// <summary>Gửi Ctrl+C tới app đang dùng, đọc chữ, rồi trả clipboard về như cũ. "" nếu không có gì.</summary>

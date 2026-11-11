@@ -29,6 +29,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="icon.ico" LogicalName="icon.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Compile Remove="tests/**" />
     <Compile Remove="dist/**" />
     <EmbeddedResource Remove="tests/**" />

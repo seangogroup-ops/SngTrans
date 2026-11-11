@@ -23,12 +23,22 @@ public static class Gfx
         return p;
     }
 
+    // Cọ tô dùng lại theo màu: tránh tạo/huỷ một SolidBrush mỗi lần vẽ. Chỉ dùng trên luồng giao diện.
+    static readonly Dictionary<int, SolidBrush> BrushCache = new();
+
+    static SolidBrush BrushOf(Color c)
+    {
+        int key = c.ToArgb();
+        if (BrushCache.TryGetValue(key, out var b)) return b;
+        if (BrushCache.Count >= 128) BrushCache.Clear();       // màu chuyển động (hiệu ứng) có thể sinh nhiều màu lẻ: giữ bộ nhớ đệm nhỏ
+        return BrushCache[key] = new SolidBrush(c);
+    }
+
     public static void FillRound(Graphics g, Color c, RectangleF r, float radius)
     {
         if (c.IsEmpty || c.A == 0) return;
         using var p = Round(r, radius);
-        using var b = new SolidBrush(c);
-        g.FillPath(b, p);
+        g.FillPath(BrushOf(c), p);
     }
 
     public static void DrawRound(Graphics g, Color c, RectangleF r, float radius, float width = 1f)

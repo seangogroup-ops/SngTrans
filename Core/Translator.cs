@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net;
+using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -49,7 +50,7 @@ public static class Translator
     const int Retries = 1;          // số lần thử lại khi gặp 429/5xx
     const double Cooldown = 20.0;   // giây tạm bỏ một endpoint sau khi nó trả 429
     const int CacheMax = 200;
-    const double DnsTtl = 300.0;
+    const double DnsTtl = 60.0;     // ngắn để bật/tắt VPN, proxy hay đổi DNS không bị kẹt IP cũ
     const int Long = 60;            // >= ngần này ký tự thì chỉ lấy bản dịch (bỏ nghĩa/ví dụ cho nhẹ)
     const int Chunk = 450;          // cắt đoạn dài thành các khúc và dịch song song
 
@@ -67,7 +68,31 @@ public static class Translator
     public static Func<string, CancellationToken, Task<byte[]>> Fetcher { get; set; } = FetchNetwork;
 
     // ---------------------------------------------------------------- kết nối dùng chung
-    static readonly HttpClient Http = CreateClient();
+    static volatile HttpClient Http = CreateClient();
+    static long _lastReset = -10000;
+
+    static Translator()
+    {
+        // Bật/tắt VPN, đổi Wi-Fi, đổi proxy...: bỏ DNS đã nhớ và các kết nối cũ (chúng thường đã chết) rồi tạo lại.
+        NetworkChange.NetworkAddressChanged += (_, _) => ResetNetwork();
+        NetworkChange.NetworkAvailabilityChanged += (_, _) => ResetNetwork();
+    }
+
+    /// <summary>Quên DNS, bỏ hồ kết nối cũ và các endpoint đang bị "phạt".</summary>
+    public static void ResetNetwork()
+    {
+        // Windows báo đổi mạng nhiều lần liên tiếp, và nhiều yêu cầu song song cùng lỗi một lúc: chỉ làm mới một lần mỗi giây
+        long now = Environment.TickCount64, prev = Interlocked.Read(ref _lastReset);
+        if (now - prev < 1000 || Interlocked.CompareExchange(ref _lastReset, now, prev) != prev) return;
+        Dns.Clear();
+        CoolUntil.Clear();
+        Latency.Clear();
+        LastUse.Clear();
+        var old = Http;
+        Http = CreateClient();
+        // yêu cầu đang chạy dở trên client cũ vẫn được kết thúc; 30 giây sau mới đóng hẳn
+        _ = Task.Delay(30000).ContinueWith(_ => { try { old.Dispose(); } catch { } });
+    }
 
     static HttpClient CreateClient()
     {
@@ -75,14 +100,14 @@ public static class Translator
         {
             PooledConnectionIdleTimeout = TimeSpan.FromSeconds(80),
             PooledConnectionLifetime = TimeSpan.FromMinutes(10),
-            ConnectTimeout = TimeSpan.FromSeconds(3),
+            ConnectTimeout = TimeSpan.FromSeconds(10),     // qua VPN/proxy bắt tay chậm hơn bình thường
             AutomaticDecompression = DecompressionMethods.All,
             EnableMultipleHttp2Connections = true,
             ConnectCallback = ConnectIpv4First,
         };
         var c = new HttpClient(h)
         {
-            Timeout = TimeSpan.FromSeconds(10),
+            Timeout = TimeSpan.FromSeconds(15),
             DefaultRequestVersion = HttpVersion.Version20,
             DefaultVersionPolicy = HttpVersionPolicy.RequestVersionOrLower,
         };
@@ -107,31 +132,54 @@ public static class Translator
         var host = ctx.DnsEndPoint.Host;
         var port = ctx.DnsEndPoint.Port;
         Exception? last = null;
-        foreach (var ip in await ResolveAsync(host, ct).ConfigureAwait(false))
+        try
         {
-            var s = new Socket(ip.AddressFamily, SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
-            try
+            foreach (var ip in await ResolveAsync(host, ct).ConfigureAwait(false))
             {
-                using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                cts.CancelAfter(3000);
-                await s.ConnectAsync(new IPEndPoint(ip, port), cts.Token).ConfigureAwait(false);
-                return new NetworkStream(s, ownsSocket: true);
-            }
-            catch (Exception e)
-            {
-                s.Dispose();
-                last = e;
-                if (ct.IsCancellationRequested) throw;
+                var s = new Socket(ip.AddressFamily, SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
+                try
+                {
+                    using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                    cts.CancelAfter(6000);
+                    await s.ConnectAsync(new IPEndPoint(ip, port), cts.Token).ConfigureAwait(false);
+                    return new NetworkStream(s, ownsSocket: true);
+                }
+                catch (Exception e)
+                {
+                    s.Dispose();
+                    last = e;
+                    if (ct.IsCancellationRequested) throw;
+                }
             }
         }
+        catch (Exception e) when (!ct.IsCancellationRequested) { last = e; }
         Dns.TryRemove(host, out _);
-        throw last ?? new IOException("không kết nối được");
+
+        // Cách riêng không được (VPN/proxy kiểu "fake IP", DNS lạ...): để hệ điều hành tự phân giải và kết nối.
+        var fallback = new Socket(SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
+        try
+        {
+            await fallback.ConnectAsync(ctx.DnsEndPoint, ct).ConfigureAwait(false);
+            return new NetworkStream(fallback, ownsSocket: true);
+        }
+        catch
+        {
+            fallback.Dispose();
+            if (ct.IsCancellationRequested) throw;
+            throw last ?? new IOException("không kết nối được");
+        }
     }
 
     static async Task<byte[]> FetchNetwork(string url, CancellationToken ct)
     {
-        using var req = new HttpRequestMessage(HttpMethod.Get, url);
-        using var resp = await Http.SendAsync(req, HttpCompletionOption.ResponseContentRead, ct).ConfigureAwait(false);
+        HttpResponseMessage resp;
+        try { resp = await SendGet(url, ct).ConfigureAwait(false); }
+        catch (Exception e) when ((e is HttpRequestException or IOException or SocketException) && !ct.IsCancellationRequested)
+        {
+            ResetNetwork();                         // kết nối cũ chết (đổi VPN giữa chừng...): thử lại một lần với kết nối mới
+            resp = await SendGet(url, ct).ConfigureAwait(false);
+        }
+        using var respScope = resp;
         if ((int)resp.StatusCode == 429)
         {
             double ra = 0;
@@ -140,6 +188,12 @@ public static class Translator
         }
         if (!resp.IsSuccessStatusCode) throw new Exception($"HTTP {(int)resp.StatusCode}");
         return await resp.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
+    }
+
+    static async Task<HttpResponseMessage> SendGet(string url, CancellationToken ct)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Get, url);
+        return await Http.SendAsync(req, HttpCompletionOption.ResponseContentRead, ct).ConfigureAwait(false);
     }
 
     static string Host(string url) => new Uri(url).Host;
@@ -300,7 +354,7 @@ public static class Translator
     static async Task<TranslationResult> RaceAsync(IReadOnlyList<string> urls,
         Func<string, CancellationToken, Task<TranslationResult>> run)
     {
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(12));
         var pending = new List<Task<TranslationResult>>();
         int next = 0;
         Exception? last = null;
@@ -385,45 +439,176 @@ public static class Translator
         throw new Exception(string.IsNullOrEmpty(msg) ? "không kết nối được" : msg);
     }
 
+    // ---------------------------------------------------------------- chuẩn hóa văn bản trước khi dịch
+    static readonly Regex Invisible = new("[­​‌‍⁠﻿]");
+    static readonly Regex Spaces = new("[ \t 　]+");
+    static readonly Regex Paragraphs = new(@"\n[ \t]*\n\s*");
+    // dòng mở đầu bằng gạch đầu dòng hoặc số thứ tự: giữ nguyên chỗ xuống dòng
+    static readonly Regex ListStart = new(@"^(?:[-*•·▪●○◦‣–—]\s|\(?\d{1,3}[.)]\s|\(?[a-zA-Z][.)]\s)");
+    // thiếu dấu cách sau dấu câu giữa hai chữ Hàn: "밝히고,자동차" -> "밝히고, 자동차"
+    static readonly Regex HangulPunct = new(@"(?<=[가-힣])([,.;!?])(?=[가-힣])");
+
+    static bool IsCjk(char c) =>
+        (c >= 0x2E80 && c <= 0x9FFF && !(c >= 0x3130 && c <= 0x318F))   // bộ thủ, CJK, kana, ký hiệu CJK (trừ jamo Hàn)
+        || (c >= 0xF900 && c <= 0xFAFF)
+        || (c >= 0xFF00 && c <= 0xFFEF)    // toàn góc
+        || c == '，' || c == '。';
+
+    /// <summary>Văn bản bôi đen từ PDF/web thường bị xuống dòng cứng giữa câu. Google dịch từng dòng riêng nên
+    /// câu bị cắt đôi, mất ý. Nối các dòng bị ngắt lại, giữ nguyên đoạn văn và danh sách.</summary>
+    public static string Prepare(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return text;
+        var t = Invisible.Replace(text.Replace("\r\n", "\n").Replace('\r', '\n').Replace('\v', '\n').Replace('\f', '\n'), "");
+        var paras = Paragraphs.Split(t).Select(JoinLines).Where(p => p.Length > 0);
+        return string.Join("\n\n", paras);
+    }
+
+    static string JoinLines(string para)
+    {
+        var sb = new System.Text.StringBuilder();
+        foreach (var raw in para.Split('\n'))
+        {
+            var line = Spaces.Replace(raw, " ").Trim();
+            if (line.Length == 0) continue;
+            if (sb.Length == 0) { sb.Append(line); continue; }
+
+            char prev = sb[^1], next = line[0];
+            if (ListStart.IsMatch(line)) sb.Append('\n');                       // mục danh sách mới
+            else if (prev == '-' && sb.Length > 1 && char.IsLetter(sb[^2]) && char.IsLower(next))
+                sb.Length--;                                                    // "exam-\nple" -> "example"
+            else if (IsCjk(prev) || IsCjk(next)) { }                            // Trung/Nhật: không cần dấu cách
+            else sb.Append(' ');                                                // Hàn, Latin, Nga...: dòng ngắt = dấu cách
+            sb.Append(line);
+        }
+        return HangulPunct.Replace(sb.ToString(), "$1 ");
+    }
+
+    // ---------------------------------------------------------------- chia khúc theo hệ chữ
+    static readonly Regex SentenceEnd = new(@"(?<=[.!?。！？\n])");
+
+    enum Script { None, Latin, Han, Japanese, Hangul, Cyrillic, Other }
+
+    /// <summary>Hệ chữ chiếm nhiều nhất trong đoạn. None nếu không có chữ cái nào (số, dấu câu, xuống dòng...).</summary>
+    static Script DominantScript(string s)
+    {
+        int lat = 0, han = 0, kana = 0, hang = 0, cyr = 0, oth = 0;
+        foreach (var c in s)
+        {
+            if (!char.IsLetter(c)) continue;
+            if (c < 0x250 || (c >= 0x1E00 && c <= 0x1EFF)) lat++;                         // Latin (kể cả chữ Việt có dấu)
+            else if ((c >= 0x3040 && c <= 0x30FF) || (c >= 0x31F0 && c <= 0x31FF)) kana++;
+            else if ((c >= 0xAC00 && c <= 0xD7AF) || (c >= 0x1100 && c <= 0x11FF) || (c >= 0x3130 && c <= 0x318F)) hang++;
+            else if (c >= 0x400 && c <= 0x52F) cyr++;
+            else if ((c >= 0x3400 && c <= 0x9FFF) || (c >= 0xF900 && c <= 0xFAFF)) han++;
+            else oth++;
+        }
+        // có kana thì chữ Hán trong đoạn đó là của tiếng Nhật
+        int ja = kana > 0 ? han + kana : 0, zh = kana > 0 ? 0 : han;
+        var best = Script.None;
+        int max = 0;
+        void Pick(Script sc, int n) { if (n > max) { max = n; best = sc; } }
+        Pick(Script.Latin, lat); Pick(Script.Han, zh); Pick(Script.Japanese, ja);
+        Pick(Script.Hangul, hang); Pick(Script.Cyrillic, cyr); Pick(Script.Other, oth);
+        return best;
+    }
+
+    /// <summary>Chỗ cắt một câu quá dài: ưu tiên sau dấu cách/dấu phẩy, không cắt giữa cặp thay thế (surrogate).</summary>
+    static int CutPoint(string piece)
+    {
+        for (int i = Chunk; i > Chunk / 2; i--)
+        {
+            char c = piece[i - 1];
+            if (char.IsWhiteSpace(c) || c is ',' or ';' or '，' or '、' or '；') return i;
+        }
+        int cut = Chunk;
+        if (char.IsHighSurrogate(piece[cut - 1])) cut--;
+        return cut;
+    }
+
+    /// <summary>Cắt thành các khúc &lt;= Chunk ký tự. Ghép lại các khúc sẽ ra đúng nguyên văn.
+    /// Không bao giờ gộp hai câu khác hệ chữ (Trung, Hàn, Nhật, Nga, Latin...) vào cùng một khúc, vì Google chỉ đoán
+    /// được MỘT ngôn ngữ cho mỗi lần gọi: gộp lại thì câu ngôn ngữ kia bị bỏ nguyên hoặc bị dịch bậy.</summary>
     public static List<string> Split(string text)
     {
         var parts = new List<string>();
-        var cur = "";
-        foreach (var p in Regex.Split(text, @"(?<=[.!?。\n])"))
+        var cur = new System.Text.StringBuilder();
+        var neutral = new System.Text.StringBuilder();       // số thứ tự, xuống dòng...: đi theo câu kế tiếp
+        var curScript = Script.None;
+
+        void Flush()
         {
-            var piece = p;
-            if (piece.Length == 0) continue;
-            if (cur.Length + piece.Length > Chunk && cur.Length > 0)
-            {
-                parts.Add(cur);
-                cur = "";
-            }
-            while (piece.Length > Chunk)               // câu quá dài không có dấu chấm
-            {
-                parts.Add(piece[..Chunk]);
-                piece = piece[Chunk..];
-            }
-            cur += piece;
+            if (cur.Length > 0) parts.Add(cur.ToString());
+            cur.Clear();
+            curScript = Script.None;
         }
-        if (cur.Length > 0) parts.Add(cur);
+
+        foreach (var unit in SentenceEnd.Split(text))
+        {
+            if (unit.Length == 0) continue;
+            var sc = DominantScript(unit);
+            if (sc == Script.None) { neutral.Append(unit); continue; }
+
+            var piece = neutral.ToString() + unit;
+            neutral.Clear();
+            if (cur.Length > 0 && (sc != curScript || cur.Length + piece.Length > Chunk)) Flush();
+            while (piece.Length > Chunk)                // câu quá dài không có dấu chấm
+            {
+                int cut = CutPoint(piece);
+                parts.Add(piece[..cut]);
+                piece = piece[cut..];
+            }
+            cur.Append(piece);
+            curScript = sc;
+        }
+        if (neutral.Length > 0)
+        {
+            if (cur.Length + neutral.Length > Chunk) Flush();
+            cur.Append(neutral);
+        }
+        Flush();
         return parts;
+    }
+
+    /// <summary>Ghép bản dịch các khúc lại. Google hay cắt mất khoảng trắng/xuống dòng ở hai đầu: lấy lại từ khúc gốc.</summary>
+    static string JoinParts(IReadOnlyList<string> sources, IReadOnlyList<TranslationResult> res)
+    {
+        var sb = new System.Text.StringBuilder();
+        for (int i = 0; i < res.Count; i++)
+        {
+            var src = sources[i];
+            var core = res[i].Translation.Trim();
+            var lead = src[..(src.Length - src.TrimStart().Length)];
+            var trail = src[src.TrimEnd().Length..];
+            if (sb.Length > 0 && core.Length > 0 && lead.Length == 0
+                && !char.IsWhiteSpace(sb[^1]) && !IsCjk(sb[^1]) && !IsCjk(core[0]))
+                sb.Append(' ');                         // câu Trung liền câu Việt: cần dấu cách
+            sb.Append(lead).Append(core).Append(trail);
+        }
+        return sb.ToString();
     }
 
     static async Task<TranslationResult> GtUncachedAsync(string text, string sl, string tl)
     {
-        if (text.Length <= Chunk) return await GtOneAsync(text, sl, tl).ConfigureAwait(false);
-        var parts = Split(text);
-        var tasks = parts.Select(async p =>
+        var parts = Split(text);                         // cả đoạn ngắn cũng phải tách nếu lẫn nhiều hệ chữ
+        if (parts.Count <= 1) return await GtOneAsync(text, sl, tl).ConfigureAwait(false);
+        async Task<TranslationResult> Run(string p)
         {
             await ChunkGate.WaitAsync().ConfigureAwait(false);
             try { return await GtOneAsync(p, sl, tl).ConfigureAwait(false); }
             finally { ChunkGate.Release(); }
-        }).ToList();
-        var res = await Task.WhenAll(tasks).ConfigureAwait(false);
+        }
+        var once = new Dictionary<string, Task<TranslationResult>>();   // khúc giống hệt nhau chỉ gọi mạng một lần
+        foreach (var p in parts)
+            if (!once.ContainsKey(p)) once[p] = Run(p);
+        await Task.WhenAll(once.Values).ConfigureAwait(false);
+        var res = parts.Select(p => once[p].Result).ToList();
+        int big = 0;                                    // ngôn ngữ nhận diện = của khúc dài nhất, không phải khúc đầu
+        for (int i = 1; i < parts.Count; i++) if (parts[i].Length > parts[big].Length) big = i;
         return new TranslationResult
         {
-            Translation = string.Concat(res.Select(r => r.Translation)),
-            Detected = res[0].Detected,
+            Translation = JoinParts(parts, res),
+            Detected = res[big].Detected,
         };
     }
 
@@ -474,6 +659,8 @@ public static class Translator
     public static async Task<TranslationResult> TranslateAsync(string text, string native = "vi", string foreign = "en",
         bool smart = true, (string Src, string Tgt)? manual = null)
     {
+        var prepared = Prepare(text);
+        if (prepared.Length > 0) text = prepared;
         if (manual is { } m)
         {
             var rm = await GtAsync(text, m.Src, m.Tgt).ConfigureAwait(false);

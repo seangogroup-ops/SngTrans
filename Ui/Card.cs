@@ -26,8 +26,7 @@ public sealed class Card : Form, ICardState
     (string Src, string Tgt)? _manual;
     Point _anchor;
     string? _side;
-    bool _userMoved, _loading = true, _error, _showSpk1, _showSpk2, _noted;
-    int _maxH = 300, _tbH = 24;
+    bool _userMoved, _loading = true, _error, _showSpk1, _showSpk2;
     volatile bool _pinned, _isOpen, _popupOpen;
     IntPtr _hwnd;
 
@@ -40,12 +39,13 @@ public sealed class Card : Form, ICardState
     // điều khiển
     readonly Pill _srcPill = new(), _tgtPill = new();
     readonly FlatBtn _swap, _pin, _close, _spk1, _spk2, _copy, _add, _retry;
+    int _origLines = 1, _origW;
     readonly DragLabel _orig = new();
     readonly RichView _tb = new();
     readonly Skeleton _skel = new();
     readonly Check _block = new();
-    readonly Ctl _sep = new() { BackColor = Color.FromArgb(18, 255, 255, 255), PassThrough = true };
     readonly List<Ctl> _ctls = new();
+    readonly Control[] _content;
     readonly System.Windows.Forms.Timer _copyTimer = new() { Interval = 1300 };
     LangPicker? _picker;
     bool _pickIsSrc;
@@ -64,29 +64,43 @@ public sealed class Card : Form, ICardState
         DoubleBuffered = true;
 
         _swap = Btn(Theme.GForward, "Đổi chiều dịch", 15);
+        _swap.Fore = Theme.CardDim; _swap.HoverFore = Theme.CardMuted;
         _pin = Btn(Theme.GPin, "Ghim (không tự đóng)", 16);
         _pin.Checkable = true; _pin.CheckedFore = Theme.C("#60a5fa");
         _close = Btn(Theme.GCancel, "Đóng", 16);
-        _spk1 = Btn(Theme.GVolume, "Nghe câu gốc", 16);
-        _spk2 = Btn(Theme.GVolume, "Nghe bản dịch", 16);
+        foreach (var b in new[] { _pin, _close }) { b.Fore = Theme.CardMuted; b.HoverFore = Theme.Txt; }
+        _spk1 = Btn(Theme.GVolume, "Nghe câu gốc", 15);
+        _spk1.Fore = Theme.CardDim; _spk1.HoverFore = Theme.C("#60a5fa");
+        _spk2 = Btn(Theme.GVolume, "Nghe bản dịch", 17);
+        _spk2.Fore = Theme.C("#60a5fa"); _spk2.HoverFore = Theme.C("#93c5fd");
         _copy = Btn(Theme.GCopy, "Sao chép bản dịch", 16);
+        _copy.Fore = Theme.CardMuted; _copy.HoverFore = Theme.Txt;
+        foreach (var b in new[] { _swap, _pin, _close, _spk1, _spk2, _copy }) b.HoverBack = Theme.CardHover;
         _add = new FlatBtn
         {
-            Caption = "Ghi nhớ", Bold = true, FontPx = 13, Radius = 12, Fore = Theme.C("#0f1629"), HoverFore = Theme.C("#0f1629"),
-            Back = Theme.C("#f5f7fc"), HoverBack = Theme.C("#e4e9f6"), DisabledBack = Theme.C("#222d4f"), DisabledFore = Theme.Dim,
+            Caption = "Ghi nhớ", Bold = true, FontPx = 14, Radius = 12, Fore = Color.White, HoverFore = Color.White,
+            Back = Theme.Primary, HoverBack = Theme.PrimaryHover, DisabledBack = Theme.C("#26304f"), DisabledFore = Theme.CardDim,
             Cursor = Cursors.Hand,
         };
         _retry = new FlatBtn { Caption = "Thử lại", FontPx = 14, LeftAlign = true, Fore = Theme.Link, HoverFore = Color.White, HoverBack = Color.Empty, Cursor = Cursors.Hand };
         _block.Caption = "Không dịch app này";
+        _block.Fore = Theme.CardMuted; _block.BoxBorder = Theme.C("#4a5680"); _block.BoxHover = Theme.C("#7c8bb8");
+        _block.BoxFill = Theme.CardBg; _block.BoxPx = 18;
+
+        StylePill(_srcPill, Theme.SrcBg, Theme.SrcHover, Theme.SrcFore, Theme.CardDim);
+        StylePill(_tgtPill, Theme.SrcBg, Theme.SrcHover, Theme.SrcFore, Theme.CardDim);     // hai viên cùng một kiểu
 
         _orig.AutoSize = false;
         _orig.UseMnemonic = false;
         _orig.BackColor = Theme.CardBg;
-        _orig.ForeColor = Theme.Muted;
+        _orig.ForeColor = Theme.CardMuted;
 
-        foreach (var c in new Ctl[] { _srcPill, _tgtPill, _swap, _pin, _close, _spk1, _spk2, _copy, _add, _retry, _tb, _skel, _block, _sep })
+        _content = new Control[] { _srcPill, _swap, _tgtPill, _pin, _close, _orig, _tb, _block, _add };
+        foreach (var c in new Ctl[] { _srcPill, _tgtPill, _swap, _pin, _close, _spk1, _spk2, _copy, _add, _retry, _tb, _skel, _block })
             _ctls.Add(c);
-        Controls.AddRange(new Control[] { _skel, _srcPill, _swap, _tgtPill, _pin, _close, _orig, _spk1, _tb, _spk2, _copy, _retry, _sep, _block, _add });
+        Controls.AddRange(new Control[] { _skel, _srcPill, _swap, _tgtPill, _pin, _close, _orig, _spk1, _tb, _spk2, _copy, _retry, _block, _add });
+        _spk1.BringToFront();         // loa câu gốc nằm đè lên nhãn chữ nên phải ở trên nó
+        _add.BringToFront();          // nút "Ghi nhớ" nằm đè lên vùng bản dịch nên phải ở trên cùng, nếu không bị RichView che mất
 
         _srcPill.Cursor = _tgtPill.Cursor = Cursors.Hand;
         _srcPill.Click += (_, _) => Pick(_srcPill, true);
@@ -100,7 +114,7 @@ public sealed class Card : Form, ICardState
         _retry.Click += (_, _) => { ShowLoading(); TranslateRequested?.Invoke(_manual); };
         _add.Click += (_, _) => AddRequested?.Invoke();
         _block.CheckedChanged += (_, _) => BlockToggled?.Invoke(_block.Checked);
-        _copyTimer.Tick += (_, _) => { _copyTimer.Stop(); _copy.Glyph = Theme.GCopy; _copy.Fore = Theme.Muted; _copy.Invalidate(); };
+        _copyTimer.Tick += (_, _) => { _copyTimer.Stop(); _copy.Glyph = Theme.GCopy; _copy.Fore = Theme.CardMuted; _copy.Invalidate(); };
         _skel.PassThrough = true;
 
         _srcPill.SetLang("auto", "Tự động", null);
@@ -117,6 +131,11 @@ public sealed class Card : Form, ICardState
     }
 
     readonly ToolTip _tips = new();
+
+    static void StylePill(Pill p, Color bg, Color hover, Color fore, Color chevron)
+    {
+        p.Bold = true; p.Bg = bg; p.BgHover = hover; p.Fore = fore; p.Chevron = chevron;
+    }
 
     // ------------------------------------------------------------ kiểu cửa sổ
     protected override CreateParams CreateParams
@@ -136,7 +155,7 @@ public sealed class Card : Form, ICardState
     {
         base.OnHandleCreated(e);
         _hwnd = Handle;
-        Win32.SetRoundedBorder(Handle, 0x472D25);
+        Win32.SetRoundedBorder(Handle, 0x54342A);     // viền #2a3454 (BGR)
     }
 
     protected override void WndProc(ref Message m)
@@ -198,7 +217,7 @@ public sealed class Card : Form, ICardState
         s *= CardShrink;
         S = s;
         foreach (var c in _ctls) c.S = s;
-        _block.FontPx = 12;
+        _block.FontPx = 14;
         _srcPill.Remeasure();
         _tgtPill.Remeasure();
     }
@@ -270,19 +289,10 @@ public sealed class Card : Form, ICardState
 
     void SetNoted(bool added)
     {
-        _noted = added;
-        if (added)
-        {
-            _add.Glyph = ""; _add.Caption = "Ghi nhớ";
-            _add.DisabledBack = Theme.C("#22c55e"); _add.DisabledFore = Color.White;
-            _add.Enabled = false;
-        }
-        else
-        {
-            _add.Glyph = ""; _add.Caption = "Ghi nhớ";
-            _add.DisabledBack = Theme.C("#222d4f"); _add.DisabledFore = Theme.Dim;
-            _add.Enabled = false;                       // chỉ bật khi đã có bản dịch
-        }
+        _add.Caption = "Ghi nhớ";
+        _add.DisabledBack = added ? Theme.C("#22c55e") : Theme.C("#26304f");
+        _add.DisabledFore = added ? Color.White : Theme.CardDim;
+        _add.Enabled = false;                           // chỉ bật lại khi đã có bản dịch mới (ShowResult)
         _add.Invalidate();
     }
 
@@ -290,13 +300,15 @@ public sealed class Card : Form, ICardState
 
     void SetOrig(bool word, bool speaker)
     {
-        float px = word ? 18 : 13;
+        float px = word ? 18 : 14;
         var font = Theme.Ui(px, word, S);
-        int w = Px(InnerW) - (speaker ? Px(32) : 0);
+        int w = Px(InnerW) - (speaker ? Px(26) : 0);
         var (shown, n) = Gfx.FitLines(_text, font, w, word ? 2 : 3);
         _orig.Font = font;
-        _orig.ForeColor = word ? Theme.Txt : Theme.Muted;
+        _orig.ForeColor = word ? Theme.Txt : Theme.CardMuted;
         _orig.Text = shown;
+        _origLines = n;
+        _origW = Gfx.TextWidth(shown, font);
         _orig.Size = new Size(w, font.Height * n + 2);
         _tips.SetToolTip(_orig, _text.Length > 600 ? _text[..600] : _text);
         _showSpk1 = speaker;
@@ -311,16 +323,25 @@ public sealed class Card : Form, ICardState
         _skel.Start();
     }
 
-    List<Block> BuildBlocks(TranslationResult res)
+    const float AddInset = 92;      // chỗ chừa bên phải bản dịch cho nút "Ghi nhớ" (đơn vị 96 dpi)
+
+    /// <summary>Bản dịch ngắn (từ, cụm từ): chữ to đậm, nút "Ghi nhớ" nằm cạnh. Bản dịch dài: chữ thường, nút xuống hàng dưới.</summary>
+    static bool IsShort(string t) => t.Length <= 40 && !t.Contains('\n');
+
+    List<Block> BuildBlocks(TranslationResult res, bool word)
     {
-        var bl = new List<Block> { new() { Text = res.Translation, Px = 16, Color = Theme.Txt } };
-        Block Title(string t) => new() { Text = t.ToUpperInvariant(), Px = 10, Bold = true, Color = Theme.Dim, Before = 14, After = 3 };
-        var body = Theme.C("#d5dcf5");
+        bool shortTr = IsShort(res.Translation);
+        var bl = new List<Block>
+        {
+            new() { Text = res.Translation, Px = !shortTr ? 15 : word ? 16 : 18, Bold = shortTr && !word, Color = Theme.Txt, Inset = shortTr ? AddInset : 0 },
+        };
+        Block Title(string t) => new() { Text = t.ToUpperInvariant(), Px = 10, Bold = true, Color = Theme.CardDim, Before = 14, After = 3 };
+        var body = Theme.CardBody;
         if (res.Meanings.Count > 0)
         {
             bl.Add(Title("Nghĩa"));
             foreach (var m in res.Meanings)
-                bl.Add(new Block { Lead = m.Pos, Italic = true, LeadColor = Theme.Dim, Text = string.Join(" · ", m.Words), Px = 13, Color = body, Before = 3, After = 3 });
+                bl.Add(new Block { Lead = m.Pos, Italic = true, LeadColor = Theme.CardDim, Text = string.Join(" · ", m.Words), Px = 13, Color = body, Before = 3, After = 3 });
         }
         if (res.Synonyms.Count > 0)
         {
@@ -331,7 +352,7 @@ public sealed class Card : Form, ICardState
         {
             bl.Add(Title("Ví dụ"));
             foreach (var x in res.Examples)
-                bl.Add(new Block { Lead = "•", LeadColor = Theme.Dim, Text = x, Px = 13, Color = Theme.Muted, Before = 4, After = 4 });
+                bl.Add(new Block { Lead = "•", LeadColor = Theme.CardDim, Text = x, Px = 13, Color = Theme.CardMuted, Before = 4, After = 4 });
         }
         return bl;
     }
@@ -356,13 +377,14 @@ public sealed class Card : Form, ICardState
         bool word = _text.Length <= 40 && !_text.Contains('\n') && !srcNative;
         _loading = false;
         _error = false;
+        _shortTr = IsShort(res.Translation);
         SetOrig(word, true);   // luôn có nút nghe câu gốc, kể cả khi nguồn là tiếng mẹ đẻ
         _showSpk2 = true;   // luôn cho nghe bản dịch, kể cả khi dịch sang tiếng mẹ đẻ
-        _copy.Glyph = Theme.GCopy; _copy.Fore = Theme.Muted;
+        _copy.Glyph = Theme.GCopy; _copy.Fore = Theme.CardMuted;
         _skel.Stop();
         SetNoted(false);
         _add.Enabled = true;
-        _tbContentH = _tb.SetBlocks(BuildBlocks(res), Px(InnerW));
+        _tbContentH = _tb.SetBlocks(BuildBlocks(res, word), Px(InnerW));
         Relayout();
     }
 
@@ -370,14 +392,16 @@ public sealed class Card : Form, ICardState
     {
         _loading = false;
         _error = true;
+        _shortTr = true;
         _skel.Stop();
         SetOrig(false, false);
         SetNoted(false);
-        _tbContentH = _tb.SetBlocks(new List<Block> { new() { Text = msg, Px = 14, Color = Theme.Err } }, Px(InnerW));
+        _tbContentH = _tb.SetBlocks(new List<Block> { new() { Text = msg, Px = 14, Color = Theme.CardErr } }, Px(InnerW));
         Relayout();
     }
 
     int _tbContentH;
+    bool _shortTr = true;
 
     // ------------------------------------------------------------ kích thước / vị trí
     Rectangle ScreenGeo() => Screen.FromPoint(_anchor).WorkingArea;
@@ -386,90 +410,114 @@ public sealed class Card : Form, ICardState
     {
         var g = ScreenGeo();
         int room = Math.Max(_anchor.Y - g.Top, g.Bottom - _anchor.Y);
-        _maxH = (int)(Math.Max(90, Math.Min(320, room / S - 250)) * S);
+        int maxH = (int)(Math.Max(90, Math.Min(320, room / S - 250)) * S);
 
-        int pad = Px(Pad), inner = Px(InnerW), W = Px(BodyW), btn = Px(28);
         SuspendLayout();
         int y = Px(14);
 
-        var content = new Control[] { _srcPill, _swap, _tgtPill, _pin, _close, _orig, _tb, _sep, _block, _add };
-        foreach (var c in content) c.Visible = !_loading;
+        foreach (var c in _content) c.Visible = !_loading;
+        _add.Visible = !_loading && !_error;
         _skel.Visible = _loading;
 
         if (_loading)
         {
-            _skel.SetBounds(pad, y, inner, Px(114));
+            _skel.SetBounds(Px(Pad), y, Px(InnerW), Px(114));
             _spk1.Visible = _spk2.Visible = _copy.Visible = _retry.Visible = false;
             y += Px(114);
         }
         else
         {
-            int ph = Px(32);
-            int x = pad;
-            _srcPill.Height = ph; _srcPill.Remeasure();
-            _tgtPill.Height = ph; _tgtPill.Remeasure();
-            _close.SetBounds(W - pad - btn, y + (ph - btn) / 2, btn, btn);
-            _pin.SetBounds(_close.Left - btn - Px(2), y + (ph - btn) / 2, btn, btn);
-            // Tên ngôn ngữ dài (vd "中文 (简体)") không được lấn sang nút ghim/đóng: co hai viên lại, chữ thừa thành "…"
-            int avail = _pin.Left - Px(6) - pad - btn - Px(4);
-            int need = _srcPill.Width + _tgtPill.Width;
-            if (need > avail && need > 0)
-            {
-                int minW = Px(84);
-                int sw = Math.Max(minW, (int)((long)avail * _srcPill.Width / need));
-                int tw = Math.Max(minW, avail - sw);
-                _srcPill.Width = Math.Min(_srcPill.Width, sw);
-                _tgtPill.Width = Math.Min(_tgtPill.Width, tw);
-            }
-            _srcPill.Location = new Point(x, y); x += _srcPill.Width + Px(2);
-            _swap.SetBounds(x, y + (ph - btn) / 2, btn, btn); x += btn + Px(2);
-            _tgtPill.Location = new Point(x, y);
-            y += ph + Px(12);
-
-            _orig.Location = new Point(pad, y);
-            _spk1.Visible = _showSpk1;
-            _spk1.SetBounds(pad + inner - btn, y, btn, btn);
-            y += Math.Max(_orig.Height, _showSpk1 ? btn : 0) + Px(8);
-
-            _tbH = Math.Max(Px(24), Math.Min(_tbContentH, _maxH));
-            _tb.SetBounds(pad, y, inner, _tbH);
-            y += _tbH;
-
-            y += Px(4);
-            _spk2.Visible = !_error && _showSpk2;
-            _copy.Visible = !_error;
-            _retry.Visible = _error;
-            int ax = pad;
-            if (_spk2.Visible) { _spk2.SetBounds(ax, y, btn, btn); ax += btn; }
-            _copy.SetBounds(ax, y, btn, btn);
-            _retry.SetBounds(pad, y, Px(120), btn);
-            y += btn;
-
-            y += Px(10);
-            _sep.SetBounds(pad, y, inner, 1);
-            y += 1 + Px(12);
-
-            int fh = Px(36);
-            _block.Width = Math.Min(inner / 2 + Px(30), _block.PreferredWidth);
-            _block.Height = Px(24);
-            _block.Location = new Point(pad, y + (fh - _block.Height) / 2);
-            int aw = Gfx.TextWidth(_add.Caption, Theme.Ui(13, true, S)) + Px(32);
-            _add.SetBounds(W - pad - aw, y, aw, fh);
-            y += fh;
+            y = LayoutHeader(y);
+            y = LayoutOriginal(y);
+            y = LayoutBody(y, maxH);
         }
 
-        ClientSize = new Size(W, y + Px(14));
+        ClientSize = new Size(Px(BodyW), y + Px(14));
         ResumeLayout(false);
-
-        if (!Win32.IsWin11)
-        {
-            using var path = Gfx.Round(new RectangleF(0, 0, Width, Height), Px(14));
-            var old = Region;
-            Region = new Region(path);
-            old?.Dispose();
-        }
+        ApplyRoundedRegion();
         Reposition();
         Invalidate(true);
+    }
+
+    /// <summary>Hàng đầu: hai viên ngôn ngữ, nút đổi chiều, ghim, đóng. Trả về y của hàng kế tiếp.</summary>
+    int LayoutHeader(int y)
+    {
+        int pad = Px(Pad), W = Px(BodyW), btn = Px(28);
+        int ph = Px(32);
+        int x = pad;
+        _srcPill.Height = ph; _srcPill.Remeasure();
+        _tgtPill.Height = ph; _tgtPill.Remeasure();
+        _close.SetBounds(W - pad - btn, y + (ph - btn) / 2, btn, btn);
+        _pin.SetBounds(_close.Left - btn - Px(2), y + (ph - btn) / 2, btn, btn);
+        // Tên ngôn ngữ dài (vd "中文 (简体)") không được lấn sang nút ghim/đóng: co hai viên lại, chữ thừa thành "…"
+        int avail = _pin.Left - Px(6) - pad - btn - Px(4);
+        int need = _srcPill.Width + _tgtPill.Width;
+        if (need > avail && need > 0)
+        {
+            int minW = Px(84);
+            int sw = Math.Max(minW, (int)((long)avail * _srcPill.Width / need));
+            int tw = Math.Max(minW, avail - sw);
+            _srcPill.Width = Math.Min(_srcPill.Width, sw);
+            _tgtPill.Width = Math.Min(_tgtPill.Width, tw);
+        }
+        _srcPill.Location = new Point(x, y); x += _srcPill.Width + Px(2);
+        _swap.SetBounds(x, y + (ph - btn) / 2, btn, btn); x += btn + Px(2);
+        _tgtPill.Location = new Point(x, y);
+        return y + ph + Px(12);
+    }
+
+    /// <summary>Câu gốc: chữ nhỏ màu xám, loa nằm ngay sau chữ (câu nhiều dòng thì loa ở góc phải dòng đầu).</summary>
+    int LayoutOriginal(int y)
+    {
+        int pad = Px(Pad), inner = Px(InnerW), sb = Px(24);
+        _orig.Location = new Point(pad, y);
+        _spk1.Visible = _showSpk1;
+        int lineH = Math.Max(1, _orig.Font.Height);
+        int sx = _origLines <= 1 ? Math.Min(pad + _origW + Px(8), pad + inner - sb) : pad + inner - sb;
+        _spk1.SetBounds(sx, y + (lineH - sb) / 2, sb, sb);
+        return y + _orig.Height + Px(10);
+    }
+
+    /// <summary>Bản dịch, nút "Ghi nhớ" và hàng dưới (nghe · sao chép · "Không dịch app này").</summary>
+    int LayoutBody(int y, int maxH)
+    {
+        int pad = Px(Pad), inner = Px(InnerW), W = Px(BodyW), btn = Px(28), fh = Px(34);
+        int tbH = Math.Max(Px(30), Math.Min(_tbContentH, maxH));
+        _tb.SetBounds(pad, y, inner, tbH);
+        int aw = Math.Max(Px(80), Gfx.TextWidth(_add.Caption, Theme.Ui(14, true, S)) + Px(32));
+        bool addBeside = _shortTr && !_error;           // nút nằm cạnh bản dịch ngắn, còn không thì xuống hàng dưới
+        if (addBeside) _add.SetBounds(W - pad - aw, y - Px(2), aw, fh);
+        y += tbH + Px(6);
+
+        int rowH = addBeside ? btn : fh;
+        int ry = y + (rowH - btn) / 2;
+        if (!addBeside) _add.SetBounds(W - pad - aw, y, aw, fh);
+        _spk2.Visible = !_error && _showSpk2;
+        _copy.Visible = !_error;
+        _retry.Visible = _error;
+        int ax = pad;
+        if (_spk2.Visible) { _spk2.SetBounds(ax, ry, btn, btn); ax += btn + Px(2); }
+        if (_copy.Visible) { _copy.SetBounds(ax, ry, btn, btn); ax += btn; }
+        if (_retry.Visible) { _retry.SetBounds(pad, ry, Px(120), btn); ax = pad + Px(120); }
+        ax += Px(10);
+        _block.Height = Px(26);
+        int right = addBeside || _error ? W - pad : W - pad - aw - Px(8);
+        _block.Width = Math.Max(Px(40), Math.Min(right - ax, _block.PreferredWidth));
+        _block.Location = new Point(ax, y + (rowH - _block.Height) / 2);
+        return y + rowH;
+    }
+
+    Size _rgnSize;
+
+    /// <summary>Win10 không có góc bo của hệ thống nên tự cắt vùng; chỉ tạo lại khi kích thước đổi.</summary>
+    void ApplyRoundedRegion()
+    {
+        if (Win32.IsWin11 || _rgnSize == Size) return;
+        _rgnSize = Size;
+        using var path = Gfx.Round(new RectangleF(0, 0, Width, Height), Px(14));
+        var old = Region;
+        Region = new Region(path);
+        old?.Dispose();
     }
 
     /// <summary>Hiện ngay phía trên con trỏ, căn giữa; thiếu chỗ thì xuống dưới (chọn một lần cho mỗi thẻ).</summary>
